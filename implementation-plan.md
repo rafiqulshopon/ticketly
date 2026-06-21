@@ -1,8 +1,9 @@
 # Implementation Plan
 
-**Philosophy:** build a thin vertical slice first — a *working manual ticket system* — then layer the AI on top. This de-risks the architecture (email loop, threading, auth, dashboard) before the AI value depends on it, and gives agents something usable early.
+**Philosophy:** build a thin vertical slice first — a _working manual ticket system_ — then layer the AI on top. This de-risks the architecture (email loop, threading, auth, dashboard) before the AI value depends on it, and gives agents something usable early.
 
 **Two milestones:**
+
 - **M1 — Functional ticketing without AI** (Phases 0–3): emails come in, become tickets, agents read/reply/send by hand.
 - **M2 — Full AI-assisted MVP** (Phases 4–5): the human-in-the-loop draft loop with RAG + classification + summaries. This is the core product value.
 
@@ -14,13 +15,13 @@ Phases 6–7 are admin tooling, metrics, and production hardening.
 
 **Goal:** repo + tooling ready to build.
 
-- [ ] Monorepo layout: `web/` (Vite), `api/` (NestJS), `shared/` for Zod schemas + types
-- [ ] Scaffold NestJS app (`api/`); ESLint / Prettier / tsconfig
-- [ ] Scaffold Vite + React app (`web/`); Tailwind + shadcn/ui init
-- [ ] Neon Postgres with `pgvector` extension enabled; connection strings in `.env`
-- [ ] Prisma init in `api/`; baseline migration setup
-- [ ] Shared Zod schema package (Ticket, User, KB shapes) imported by both apps
-- [ ] `.env.example` files; branch protection on `main`
+- [x] Monorepo layout: `web/` (Vite), `api/` (NestJS), `shared/` for Zod schemas + types
+- [x] Scaffold NestJS app (`api/`); ESLint 10 (flat config) / Prettier / tsconfig — _all three workspaces lint clean (`npm run lint`)_
+- [x] Scaffold Vite + React app (`web/`); Tailwind v4 + shadcn/ui (new-york) init
+- [x] Neon Postgres with `pgvector` extension enabled; connection strings in `.env`
+- [x] Prisma 7 init in `api/` (`prisma.config.ts`, `prisma-client` generator + pg driver adapter); baseline migration applied
+- [x] Shared Zod schema package (Ticket, User, KB shapes); consumed by `web`, wired into `api` from Phase 1+
+- [x] `.env.example` files (api + web); default branch is `local` — _GitHub branch-protection is a remote repo setting (enable in GitHub → Branches, or defer to Phase 7)_
 
 ---
 
@@ -44,13 +45,15 @@ Phases 6–7 are admin tooling, metrics, and production hardening.
 
 **Goal:** agents can work tickets end-to-end by hand.
 
-*Backend (`api/`):*
+_Backend (`api/`):_
+
 - [ ] Tickets module: read / list (filter by status/category/priority/assignee, sort, paginate)
 - [ ] Messages module: thread per ticket
 - [ ] Status transitions including **AwaitingStudent** + reopen rules
 - [ ] SendGrid outbound service: send an agent reply as email
 
-*Frontend (`web/`):*
+_Frontend (`web/`):_
+
 - [ ] Dashboard layout (sidebar, header) with shadcn/ui
 - [ ] Ticket list view (filters, sorting, pagination) via API client → Zustand
 - [ ] Ticket detail view (message thread + metadata)
@@ -138,7 +141,7 @@ Phases 6–7 are admin tooling, metrics, and production hardening.
 
 These resolve the open gaps from scoping so the plan is buildable. Flag any you want different:
 
-- **Statuses:** Open, **AwaitingStudent**, Resolved, Closed — added *AwaitingStudent* (the gap I flagged earlier; it's the most-used state once agents send replies).
+- **Statuses:** Open, **AwaitingStudent**, Resolved, Closed — added _AwaitingStudent_ (the gap I flagged earlier; it's the most-used state once agents send replies).
 - **Priority** is its own field (Low/Normal/High), separate from category.
 - **Spam / out-of-scope** handled as a status or category bucket.
 - **Drafts are generated lazily** (when a ticket is opened) via Inngest, not eagerly on every arrival — cost control at hundreds/day.

@@ -22,7 +22,6 @@ async function bootstrap() {
 
   const port = Number(process.env.PORT ?? 3000);
   await app.listen(port);
-  // eslint-disable-next-line no-console
   console.log(`Ticketly API on http://localhost:${port}  (docs: http://localhost:${port}/api/docs)`);
 }
 
