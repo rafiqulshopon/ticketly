@@ -6,7 +6,7 @@ Full design lives in [project-scope.md](./project-scope.md), [tech-stack.md](./t
 
 ## Prerequisites
 
-- **Node.js** ≥ 20.19 (see `.nvmrc`)
+- **Node.js** ≥ 24 (see `.nvmrc`)
 - **npm**
 - A **Postgres** database with the **pgvector** extension (e.g. Neon — run `CREATE EXTENSION IF NOT EXISTS vector;` in the SQL editor)
 
@@ -74,14 +74,15 @@ npm run dev
 | `npm run db:generate` | `prisma generate` |
 | `npm run db:studio` | Prisma Studio |
 | `npm run db:seed` | seed the bootstrap admin |
+| `npm run lint` | lint all workspaces (ESLint 10, flat config) |
+| `npm run lint:fix` | lint + auto-fix across workspaces |
 
 ## Notes
 
-- **TypeScript 5.x** is pinned deliberately for framework compatibility (NestJS 11 / Vite 8 / `@types/react`). Bump to TS 6 after verifying each framework supports it.
+- **TypeScript 6.0.3** is used across all three workspaces, verified compatible with the current framework set (NestJS 11 / Vite 8 / React 19 / `@types/react`) and the lint toolchain (`typescript-eslint` 8.61 supports TS `<6.1`).
+- **Linting**: ESLint 10 flat configs live in each workspace's `eslint.config.mjs`; `npm run lint` checks all three. The `web/` config registers the React plugins by hand because ESLint 10 rejects the legacy `plugins: [...]` array form the plugins' own presets still ship.
 - **Prisma 7**: uses the `prisma-client` generator (client generated to `api/src/generated/prisma`) + a runtime `@prisma/adapter-pg` driver adapter. The migrate datasource URL lives in `api/prisma.config.ts`, **not** in `schema.prisma`. After cloning, run `npm run db:generate` to produce the client (it's gitignored).
 - **Better Auth**: the `auth` instance is configured (email/password + admin plugin + Prisma adapter), but the HTTP handler and session guard are **Phase 1** work — see `api/src/auth/auth.config.ts`.
 - **pgvector**: the `KbChunk.embedding` column and similarity search are **Phase 4** (RAG); the field is declared `Unsupported` in the schema until then.
 
-## Status
-
-**Phase 0 (Foundations) complete.** Next: **Phase 1** — mount the Better Auth handler + guards, and build the auth UI on the frontend.
+> Project status is tracked per-phase in [implementation-plan.md](./implementation-plan.md).
