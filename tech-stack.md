@@ -11,6 +11,7 @@ Decoupled architecture: a **React SPA frontend** and a **NestJS backend API**, t
 - **shadcn/ui** — component library (React + Tailwind, framework-agnostic)
 - **react-email** — reply/email templates (renders to HTML/text the backend sends)
 - **Zod** — form/input validation (schemas shared with the backend)
+- **Zustand** — lightweight state store (UI state + cached server data, fetched via the API client)
 
 ## Backend (`api/`)
 
