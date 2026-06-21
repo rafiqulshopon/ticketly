@@ -1,0 +1,30 @@
+{
+  "name": "ticketly",
+  "version": "0.0.0",
+  "private": true,
+  "description": "AI-powered ticket management system",
+  "workspaces": [
+    "api",
+    "web",
+    "shared"
+  ],
+  "scripts": {
+    "setup": "npm install && npm run build --workspace @ticketly/shared && npm run db:generate",
+    "dev": "npm run build --workspace @ticketly/shared && concurrently -n api,web -c green,cyan \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm run start:dev --workspace @ticketly/api",
+    "dev:web": "npm run dev --workspace @ticketly/web",
+    "build": "npm run build --workspace @ticketly/shared && npm run build --workspace @ticketly/api && npm run build --workspace @ticketly/web",
+    "db:generate": "npm run prisma:generate --workspace @ticketly/api",
+    "db:migrate": "npm run prisma:migrate --workspace @ticketly/api",
+    "db:studio": "npm run prisma:studio --workspace @ticketly/api",
+    "db:seed": "npm run db:seed --workspace @ticketly/api"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3",
+    "prettier": "^3.4.2",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

@@ -1,0 +1,187 @@
+// Ticketly Prisma schema
+// The Better Auth tables below can be regenerated with `npx auth generate`
+// (adjust if the current Better Auth version's shape differs).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ------------------------------------------------------------------
+// Better Auth core tables
+// ------------------------------------------------------------------
+
+model User {
+  id            String    @id @unique
+  email         String    @unique
+  emailVerified Boolean    @default(false)
+  name          String
+  image         String?
+  // admin plugin
+  role          String    @default("agent") // "admin" | "agent"
+  banned        Boolean    @default(false)
+  banReason     String?
+  banExpires    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions         Session[]
+  accounts         Account[]
+  assignedTickets  Ticket[] @relation("AssignedTickets")
+  sentMessages     Message[]
+  drafts           Draft[]
+}
+
+model Session {
+  id        String   @id @unique
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Account {
+  id                    String    @id @unique
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+model Verification {
+  id         String   @id @unique
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+// ------------------------------------------------------------------
+// App models
+// ------------------------------------------------------------------
+
+enum TicketStatus {
+  OPEN
+  AWAITING_STUDENT
+  RESOLVED
+  CLOSED
+}
+
+enum TicketCategory {
+  GENERAL_QUESTION
+  TECHNICAL_QUESTION
+  REFUND_REQUEST
+  SPAM
+}
+
+enum Priority {
+  LOW
+  NORMAL
+  HIGH
+}
+
+model Ticket {
+  id             String         @id @default(uuid())
+  subject        String
+  status         TicketStatus   @default(OPEN)
+  category       TicketCategory @default(GENERAL_QUESTION)
+  priority       Priority       @default(NORMAL)
+  requesterEmail String
+  requesterName  String?
+  messageId      String?        @unique // RFC822 Message-ID of the originating inbound email
+  assigneeId     String?
+  assignee       User?          @relation("AssignedTickets", fields: [assigneeId], references: [id])
+  messages       Message[]
+  drafts         Draft[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([status])
+  @@index([assigneeId])
+  @@index([requesterEmail])
+  @@map("tickets")
+}
+
+model Message {
+  id          String   @id @default(uuid())
+  ticketId    String
+  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  direction   String // "inbound" | "outbound"
+  fromEmail   String
+  toEmail     String
+  subject     String?
+  bodyText    String
+  bodyHtml    String?
+  messageId   String?  @unique
+  inReplyTo   String?
+  attachments Json?
+  senderId    String?
+  sender      User?    @relation(fields: [senderId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([ticketId])
+  @@map("messages")
+}
+
+model KbArticle {
+  id        String    @id @default(uuid())
+  title     String
+  slug      String    @unique
+  content   String
+  published Boolean   @default(false)
+  chunks    KbChunk[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("kb_articles")
+}
+
+model KbChunk {
+  id        String    @id @default(uuid())
+  articleId String
+  article   KbArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  content   String
+  // pgvector embedding (1024-dim, Zhipu embedding-3). Prisma can't natively type
+  // `vector`, so it's declared Unsupported; the column + the `vector` extension
+  // are created via a raw SQL migration in Phase 4 (RAG). Search uses $queryRaw.
+  embedding Unsupported("vector(1024)")?
+  createdAt DateTime  @default(now())
+
+  @@index([articleId])
+  @@map("kb_chunks")
+}
+
+model Draft {
+  id        String   @id @default(uuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  bodyText  String
+  citations Json?    // DraftCitation[] (chunkId, articleId, articleTitle, snippet)
+  model     String?
+  status    String   @default("pending") // pending | edited | sent | rejected
+  agentId   String?
+  agent     User?    @relation(fields: [agentId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ticketId])
+  @@map("drafts")
+}

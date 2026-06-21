@@ -46,6 +46,9 @@ coverage/
 .pnpm-store/
 .vite/
 
+# ---------- Generated Prisma client (Prisma 7) ----------
+**/generated/prisma/
+
 # ---------- Local databases ----------
 *.db
 *.sqlite
