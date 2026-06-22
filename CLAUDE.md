@@ -40,7 +40,8 @@ Build ordering matters: **`shared` must build before `api` and `web`** (both imp
 
 - Global route prefix is **`/api`**; **`/health` is intentionally excluded** and served at the root — `GET /health` → `{ status, service, time }`.
 - **CORS** allowlist comes from `WEB_ORIGIN` (comma-separated) in `api/src/main.ts`; defaults to `http://localhost:5173`. Set it to the frontend origin in production.
-- **Better Auth** is configured (email/password + admin/roles plugin + Prisma adapter) but the **HTTP handler is NOT mounted yet — that is Phase 1** (`/api/auth/*` + session guard). See `api/src/auth/auth.config.ts`.
+- **Better Auth** is mounted: `@thallesp/nestjs-better-auth` `AuthModule.forRoot({ auth })` in `app.module.ts` exposes `/api/auth/*` (email/password + admin plugin + Prisma adapter, **DB-backed sessions**) and registers a **global `AuthGuard`**. `/health` is opted out with `@AllowAnonymous()`. See `api/src/auth/auth.config.ts`. `main.ts` uses `{ bodyParser: false }` (the library re-adds parsers for non-auth routes).
+- **Env-load ordering gotcha:** `api/src/auth/auth.config.ts` constructs its `PrismaClient` at **import time**, which runs *before* Nest's `ConfigModule` loads `.env` — so `DATABASE_URL` was empty and Better Auth hit `ECONNREFUSED`. Fixed by `import "dotenv/config"` as the **first line of `main.ts`**. Do not remove it.
 - Port from `PORT` env (default 3000).
 
 ## Frontend (`web/`) conventions

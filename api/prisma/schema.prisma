@@ -37,15 +37,16 @@ model User {
 }
 
 model Session {
-  id        String   @id @unique
-  expiresAt DateTime
-  token     String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  ipAddress String?
-  userAgent String?
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String   @id @unique
+  expiresAt      DateTime
+  token          String   @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  ipAddress      String?
+  userAgent      String?
+  userId         String
+  impersonatedBy String? // admin plugin: the user being impersonated, if any
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Account {

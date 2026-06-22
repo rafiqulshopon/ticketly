@@ -1,10 +1,13 @@
+import "dotenv/config"; // must run before AppModule imports auth.config.ts, which builds the Better Auth PrismaClient at import time (needs DATABASE_URL)
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { AppModule } from "./app.module";
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // bodyParser must be disabled so @thallesp/nestjs-better-auth can read the raw
+  // body on /api/auth/* routes; it re-adds JSON/urlencoded parsing for the rest.
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
 
   // All app routes live under /api; health stays at the root.
   app.setGlobalPrefix("api", { exclude: ["health"] });
