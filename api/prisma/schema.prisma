@@ -22,7 +22,7 @@ model User {
   name          String
   image         String?
   // admin plugin
-  role          String    @default("agent") // "admin" | "agent"
+  role          Role      @default(agent)
   banned        Boolean    @default(false)
   banReason     String?
   banExpires    DateTime?
@@ -78,6 +78,12 @@ model Verification {
 // ------------------------------------------------------------------
 // App models
 // ------------------------------------------------------------------
+
+// User roles. Lowercase values match what Better Auth's admin plugin writes.
+enum Role {
+  admin
+  agent
+}
 
 enum TicketStatus {
   OPEN

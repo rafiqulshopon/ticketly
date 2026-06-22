@@ -27,7 +27,8 @@ export const auth = betterAuth({
   // Required for Better Auth's origin/CSRF check (separate from the CORS
   // headers applied in main.ts). Mirrors the CORS origin allowlist.
   trustedOrigins: (process.env.WEB_ORIGIN ?? "http://localhost:5173").split(","),
-  plugins: [admin()],
+  // defaultRole "agent" aligns with the Role enum; admins are set via seed/createUser.
+  plugins: [admin({ defaultRole: "agent" })],
 });
 
 export type Auth = typeof auth;

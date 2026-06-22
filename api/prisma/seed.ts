@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { auth, prisma } from "../src/auth/auth.config";
+import { Role } from "../src/generated/prisma/client";
 
 /**
  * Seeds a bootstrap admin from env (SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD).
@@ -23,7 +24,7 @@ async function main() {
   }
 
   await auth.api.createUser({
-    body: { email, password, name: "Admin", role: "admin" },
+    body: { email, password, name: "Admin", role: Role.admin },
   });
   console.log(`Seed: created admin '${email}'.`);
 }
