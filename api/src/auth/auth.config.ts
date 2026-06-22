@@ -16,8 +16,20 @@ export const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
 
+// Fail fast if production isn't served over https: a non-secure BETTER_AUTH_URL
+// disables the `Secure` flag on session cookies (Better Auth derives it from the
+// scheme), so the cookie could be sent over plain HTTP and intercepted. Dev (http)
+// is fine.
+const baseURL = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
+if (process.env.NODE_ENV === "production" && !baseURL.startsWith("https://")) {
+  throw new Error(
+    `auth.config: BETTER_AUTH_URL must be https:// in production (got "${baseURL}"). ` +
+      "A non-secure URL disables the Secure flag on session cookies.",
+  );
+}
+
 export const auth = betterAuth({
-  baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
+  baseURL,
   basePath: "/api/auth",
   database: prismaAdapter(prisma, { provider: "postgresql" }),
   // Registration is closed. Accounts are provisioned by the seed (auth.api.createUser,
@@ -27,6 +39,17 @@ export const auth = betterAuth({
   // Required for Better Auth's origin/CSRF check (separate from the CORS
   // headers applied in main.ts). Mirrors the CORS origin allowlist.
   trustedOrigins: (process.env.WEB_ORIGIN ?? "http://localhost:5173").split(","),
+  // Rate limiting. Better Auth enables this in production only by default; we force
+  // it on so dev/staging are protected too (in-memory store resets on restart, so dev
+  // friction is minimal). The default rule is 100 req / 10s; sign-in is tightened via
+  // customRules to throttle brute-force / credential-stuffing of the known bootstrap
+  // admin email — 5 attempts / 15 min per client IP (override per env as needed).
+  rateLimit: {
+    enabled: true,
+    customRules: {
+      "/sign-in/email": { window: 900, max: 5 },
+    },
+  },
   // defaultRole "agent" aligns with the Role enum; admins are set via seed/createUser.
   plugins: [admin({ defaultRole: "agent" })],
 });

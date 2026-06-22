@@ -60,6 +60,7 @@ Build ordering matters: **`shared` must build before `api` and `web`** (both imp
 - **Client:** the `better-auth/react` client in `web/src/lib/auth.ts` exposes a reactive `useSession()`; the session cookie rides on `credentials: "include"` in `web/src/lib/api.ts`. Route guard: `web/src/components/auth/require-auth.tsx`.
 - **Registration is closed** (`disableSignUp: true`). Accounts are provisioned by the seed or an admin — bootstrap one with `npm run db:seed` (`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`).
 - **Roles:** `enum Role { admin, agent }` (lowercase, matches the admin plugin; default `agent`). Admins are set via seed/createUser.
+- **Every route handler needs an access decision** — `@AllowAnonymous()`, `@Authenticated()` (any user), `@Roles(["admin"])`, or `@OrgRoles(...)`, on the method or the `@Controller` class. Enforced by the `ticketly/require-auth-decision` lint rule (fails `npm run lint`). Scope owned resources (`Ticket.assigneeId`, `Message.senderId`, `Draft.agentId`) by the caller via `@Session()`; agents see only their own, admins see all.
 
 ## Prisma 7 — gotchas
 

@@ -17,6 +17,19 @@ async function main() {
     return;
   }
 
+  // Refuse to provision an admin with a weak/placeholder password. The bootstrap
+  // admin email is a known target (see sign-in rate limiting in auth.config.ts);
+  // forcing a strong password here closes the "operator forgets to rotate" gap.
+  // (Better Auth's own policy only enforces ≥8 chars, which lets the example
+  // default through — so we check explicitly.)
+  const KNOWN_DEFAULTS = ["change-me-please", "changeme", "password", "admin"];
+  if (KNOWN_DEFAULTS.includes(password) || password.length < 12) {
+    throw new Error(
+      "Seed: SEED_ADMIN_PASSWORD is too weak — use ≥12 characters and not a known " +
+        "default. Set a strong value before running `npm run db:seed`.",
+    );
+  }
+
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
     console.log(`Seed: user '${email}' already exists — skipping.`);

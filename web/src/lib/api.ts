@@ -36,9 +36,10 @@ export interface HealthResponse {
   time: string;
 }
 
-/** Health is served at the API root (excluded from the global /api prefix), not /api/health. */
+/** Health is served at the API root (excluded from the global /api prefix), not /api/health.
+ *  Public endpoint — no credentials needed (don't send the session cookie to it). */
 export async function getHealth(): Promise<HealthResponse> {
-  const res = await fetch(`${API_ORIGIN}/health`, { credentials: "include" });
+  const res = await fetch(`${API_ORIGIN}/health`);
   if (!res.ok) {
     throw new ApiError(res.status, `${res.status} ${res.statusText}`);
   }
