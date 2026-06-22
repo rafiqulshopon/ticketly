@@ -20,7 +20,10 @@ export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
   basePath: "/api/auth",
   database: prismaAdapter(prisma, { provider: "postgresql" }),
-  emailAndPassword: { enabled: true },
+  // Registration is closed. Accounts are provisioned by the seed (auth.api.createUser,
+  // which bypasses this route) or by an admin — not self-service. disableSignUp blocks
+  // only POST /api/auth/sign-up/email; sign-in and all other routes still work.
+  emailAndPassword: { enabled: true, disableSignUp: true },
   // Required for Better Auth's origin/CSRF check (separate from the CORS
   // headers applied in main.ts). Mirrors the CORS origin allowlist.
   trustedOrigins: (process.env.WEB_ORIGIN ?? "http://localhost:5173").split(","),
