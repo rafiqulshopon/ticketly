@@ -22,7 +22,12 @@ export default tseslint.config(
     languageOptions: {
       ecmaVersion: 2022,
       globals: globals.browser,
-      parserOptions: { warnOnUnsupportedTypeScriptVersion: false },
+      parserOptions: {
+        warnOnUnsupportedTypeScriptVersion: false,
+        // Monorepo: each workspace has its own tsconfig. Without this, the IDE
+        // ESLint run accumulates api/ + web/ as candidate root dirs and errors.
+        tsconfigRootDir: import.meta.dirname,
+      },
     },
     rules: {
       ...reactHooks.configs.recommended.rules,

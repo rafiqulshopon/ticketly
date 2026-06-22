@@ -1,4 +1,6 @@
-import { createAuthClient } from "better-auth/client";
+// better-auth/react (not /client) is required so useSession is a reactive
+// React hook that re-renders on sign-in/sign-out.
+import { createAuthClient } from "better-auth/react";
 import { adminClient } from "better-auth/client/plugins";
 
 /**

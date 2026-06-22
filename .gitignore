@@ -20,6 +20,7 @@ secrets/
 .secrets/
 service-account*.json
 google-services.json
+postman/
 
 # ---------- Claude Code ----------
 # Keep shared project config (.claude/settings.json, skills, commands) tracked;
