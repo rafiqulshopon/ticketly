@@ -1,3 +1,5 @@
+import type { UserListResponse } from "@ticketly/shared";
+
 /**
  * Backend origin (no /api suffix). Empty in dev → requests are same-origin and
  * Vite proxies /api and /health to the NestJS server (vite.config.ts). In
@@ -44,4 +46,27 @@ export async function getHealth(): Promise<HealthResponse> {
     throw new ApiError(res.status, `${res.status} ${res.statusText}`);
   }
   return (await res.json()) as HealthResponse;
+}
+
+export interface GetUsersParams {
+  /** Case-insensitive substring match on email or name. */
+  q?: string;
+  /** 1-based page number. */
+  page?: number;
+  /** Page size (server clamps to 1–100). */
+  pageSize?: number;
+}
+
+/** Admin-only user directory. Pass an AbortSignal so the caller can cancel
+ *  in-flight requests when the search query / page changes. */
+export async function getUsers(
+  params: GetUsersParams = {},
+  init?: RequestInit,
+): Promise<UserListResponse> {
+  const qs = new URLSearchParams();
+  if (params.q) qs.set("q", params.q);
+  if (params.page != null) qs.set("page", String(params.page));
+  if (params.pageSize != null) qs.set("pageSize", String(params.pageSize));
+  const query = qs.toString();
+  return api<UserListResponse>(`/users${query ? `?${query}` : ""}`, init);
 }

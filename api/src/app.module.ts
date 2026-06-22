@@ -4,6 +4,7 @@ import { AuthModule as BetterAuthModule } from "@thallesp/nestjs-better-auth";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { PrismaModule } from "./prisma/prisma.module";
+import { UsersModule } from "./users/users.module";
 import { auth } from "./auth/auth.config";
 
 /**
@@ -17,6 +18,7 @@ import { auth } from "./auth/auth.config";
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
+    UsersModule,
     BetterAuthModule.forRoot({
       auth,
       // We apply CORS globally in main.ts; tell the library not to add its own
