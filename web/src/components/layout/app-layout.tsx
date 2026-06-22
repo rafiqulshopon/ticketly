@@ -26,6 +26,11 @@ export function AppLayout() {
             <Link to="/" className="hover:text-foreground">
               Dashboard
             </Link>
+            {session?.user?.role === "admin" && (
+              <Link to="/users" className="hover:text-foreground">
+                Users
+              </Link>
+            )}
           </nav>
           <div className="ml-auto flex items-center gap-3">
             {session ? (
