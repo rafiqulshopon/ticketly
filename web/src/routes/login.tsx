@@ -1,35 +1,49 @@
-import { useState, type FormEvent } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Navigate, useNavigate } from "react-router-dom";
+import { z } from "zod";
 import { signIn, useSession } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+const loginSchema = z.object({
+  email: z.string().min(1, "Email is required").email("Enter a valid email"),
+  password: z.string().min(1, "Password is required"),
+});
+
+type LoginValues = z.infer<typeof loginSchema>;
+
 export function LoginPage() {
   const { data: session, isPending } = useSession();
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: "", password: "" },
+  });
 
   // Already signed in — no reason to show the form.
   if (!isPending && session) {
     return <Navigate to="/" replace />;
   }
 
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault();
-    setError(null);
-    setSubmitting(true);
-
-    const { error: signInError } = await signIn.email({ email, password });
+  async function onSubmit(values: LoginValues) {
+    const { error: signInError } = await signIn.email({
+      email: values.email,
+      password: values.password,
+    });
 
     if (signInError) {
-      setError(signInError.message ?? "Unable to sign in. Please try again.");
-      setSubmitting(false);
+      setError("root", {
+        message: signInError.message ?? "Unable to sign in. Please try again.",
+      });
       return;
     }
 
@@ -45,18 +59,18 @@ export function LoginPage() {
           <CardDescription>Enter your credentials to access Ticketly.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={onSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
                 autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={submitting}
+                aria-invalid={errors.email ? true : undefined}
+                disabled={isSubmitting}
+                {...register("email")}
               />
+              {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
@@ -64,17 +78,17 @@ export function LoginPage() {
                 id="password"
                 type="password"
                 autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={submitting}
+                aria-invalid={errors.password ? true : undefined}
+                disabled={isSubmitting}
+                {...register("password")}
               />
+              {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
             </div>
 
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {errors.root && <p className="text-sm text-destructive">{errors.root.message}</p>}
 
-            <Button type="submit" className="w-full" disabled={submitting}>
-              {submitting ? "Signing in…" : "Sign in"}
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? "Signing in…" : "Sign in"}
             </Button>
           </form>
         </CardContent>
