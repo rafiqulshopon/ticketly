@@ -1,3 +1,4 @@
+import { type ComponentProps } from "react";
 import type { TicketListItem, TicketListResponse } from "@ticketly/shared";
 import { ApiError } from "@/lib/api";
 import {
@@ -35,28 +36,32 @@ function prettifyEnum(value: string): string {
     .replace(/^\w/, (c) => c.toUpperCase());
 }
 
+type BadgeVariant = ComponentProps<typeof Badge>["variant"];
+
+// Lookup maps keyed by the enum value: a `Record` over the union forces every
+// status/priority to be listed, so adding a new variant is a type error until
+// it's mapped (stronger than a switch, which silently misses cases).
+const STATUS_BADGES: Record<TicketListItem["status"], { label: string; variant: BadgeVariant }> = {
+  OPEN: { label: "Open", variant: "default" },
+  AWAITING_STUDENT: { label: "Awaiting", variant: "secondary" },
+  RESOLVED: { label: "Resolved", variant: "outline" },
+  CLOSED: { label: "Closed", variant: "secondary" },
+};
+
 function StatusBadge({ status }: { status: TicketListItem["status"] }) {
-  switch (status) {
-    case "OPEN":
-      return <Badge>Open</Badge>;
-    case "AWAITING_STUDENT":
-      return <Badge variant="secondary">Awaiting</Badge>;
-    case "RESOLVED":
-      return <Badge variant="outline">Resolved</Badge>;
-    case "CLOSED":
-      return <Badge variant="secondary">Closed</Badge>;
-  }
+  const { label, variant } = STATUS_BADGES[status];
+  return <Badge variant={variant}>{label}</Badge>;
 }
 
+const PRIORITY_BADGES: Record<TicketListItem["priority"], { label: string; variant: BadgeVariant }> = {
+  HIGH: { label: "High", variant: "destructive" },
+  NORMAL: { label: "Normal", variant: "default" },
+  LOW: { label: "Low", variant: "secondary" },
+};
+
 function PriorityBadge({ priority }: { priority: TicketListItem["priority"] }) {
-  switch (priority) {
-    case "HIGH":
-      return <Badge variant="destructive">High</Badge>;
-    case "NORMAL":
-      return <Badge>Normal</Badge>;
-    case "LOW":
-      return <Badge variant="secondary">Low</Badge>;
-  }
+  const { label, variant } = PRIORITY_BADGES[priority];
+  return <Badge variant={variant}>{label}</Badge>;
 }
 
 export interface TicketsTableProps {
