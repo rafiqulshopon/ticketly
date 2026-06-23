@@ -1,4 +1,6 @@
 import { Search, X } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { getAssignees } from "@/lib/api";
 import {
   Button,
   Input,
@@ -13,6 +15,7 @@ export type TicketFiltersValue = {
   status?: string;
   category?: string;
   priority?: string;
+  assigneeId?: string;
 };
 
 /** Sentinel for "no filter" — Radix Select can't use an empty-string value. */
@@ -79,7 +82,8 @@ export interface TicketFiltersProps {
 
 /**
  * Tickets toolbar: a single row with the search box + Status / Category /
- * Priority dropdowns + a Clear button (shown when a dropdown filter is active).
+ * Priority / Assignee dropdowns + a Clear button (shown when a dropdown filter
+ * is active).
  * All controls are flat flex siblings so they sit on one line and wrap together.
  * State is owned by the page; this only renders controls and reports changes.
  */
@@ -87,6 +91,16 @@ export function TicketFilters({ searchValue, onSearchChange, value, onChange }: 
   const hasActive = Object.values(value).some(Boolean);
   const setField = (field: keyof TicketFiltersValue, next: string | undefined) =>
     onChange({ ...value, [field]: next });
+
+  // Staff options are dynamic; loaded once and shared with the ticket-detail
+  // assignee picker via the `["assignees"]` cache key. Empty until the first
+  // response arrives — the dropdown then only shows "All assignees".
+  const assigneesQuery = useQuery({
+    queryKey: ["assignees"],
+    queryFn: ({ signal }) => getAssignees({ signal }),
+  });
+  const assigneeOptions: Option[] =
+    assigneesQuery.data?.map((a) => ({ value: a.id, label: a.name })) ?? [];
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -118,6 +132,12 @@ export function TicketFilters({ searchValue, onSearchChange, value, onChange }: 
         value={value.priority}
         options={PRIORITY_OPTIONS}
         onChange={(v) => setField("priority", v)}
+      />
+      <FilterSelect
+        label="Assignee"
+        value={value.assigneeId}
+        options={assigneeOptions}
+        onChange={(v) => setField("assigneeId", v)}
       />
       {hasActive && (
         <Button variant="ghost" size="sm" onClick={() => onChange({})}>
