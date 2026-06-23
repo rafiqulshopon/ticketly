@@ -1,7 +1,12 @@
-import { BadRequestException, Body, Controller, Post } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Post, Query } from "@nestjs/common";
 import { Roles } from "@thallesp/nestjs-better-auth";
-import { ApiOperation, ApiTags } from "@nestjs/swagger";
-import { createTicketSchema, type CreateTicketInput } from "@ticketly/shared";
+import { ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
+import {
+  createTicketSchema,
+  listTicketsQuerySchema,
+  type CreateTicketInput,
+  type ListTicketsQuery,
+} from "@ticketly/shared";
 import { TicketsService } from "./tickets.service";
 
 /**
@@ -17,6 +22,20 @@ import { TicketsService } from "./tickets.service";
 @Roles(["admin", "agent"])
 export class TicketsController {
   constructor(private readonly tickets: TicketsService) {}
+
+  @ApiOperation({ summary: "List tickets (newest first)" })
+  @ApiQuery({ name: "q", required: false, description: "Case-insensitive search on subject or requester email" })
+  @ApiQuery({ name: "status", required: false })
+  @ApiQuery({ name: "category", required: false })
+  @ApiQuery({ name: "priority", required: false })
+  @ApiQuery({ name: "assigneeId", required: false })
+  @ApiQuery({ name: "page", required: false, type: Number, description: "1-based page (default 1)" })
+  @ApiQuery({ name: "pageSize", required: false, type: Number, description: "Page size, 1–100 (default 25)" })
+  @Get()
+  list(@Query() raw: Record<string, string | undefined>) {
+    const query: ListTicketsQuery = listTicketsQuerySchema.parse(raw ?? {});
+    return this.tickets.list(query);
+  }
 
   @ApiOperation({ summary: "Create a ticket from an inbound request (email-like)" })
   @Post()

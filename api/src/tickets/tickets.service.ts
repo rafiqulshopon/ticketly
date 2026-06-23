@@ -1,5 +1,12 @@
 import { Injectable } from "@nestjs/common";
-import type { CreateTicketInput, Ticket } from "@ticketly/shared";
+import type {
+  CreateTicketInput,
+  ListTicketsQuery,
+  Ticket,
+  TicketListItem,
+  TicketListResponse,
+} from "@ticketly/shared";
+import type { Ticket as TicketRow } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 
 /**
@@ -77,6 +84,58 @@ export class TicketsService {
       }
       throw err;
     }
+  }
+
+  /**
+   * Ticket list, newest first (`createdAt DESC`). `q` is a case-insensitive
+   * substring match on subject or requester email; status/category/priority/
+   * assigneeId are optional equality filters (wired into the UI later). All
+   * staff see all tickets here — no assignee scoping (shared inbox).
+   */
+  async list(opts: ListTicketsQuery): Promise<TicketListResponse> {
+    const { q, status, category, priority, assigneeId, page, pageSize } = opts;
+    const where = {
+      ...(q
+        ? {
+            OR: [
+              { subject: { contains: q, mode: "insensitive" as const } },
+              { requesterEmail: { contains: q, mode: "insensitive" as const } },
+            ],
+          }
+        : {}),
+      ...(status ? { status } : {}),
+      ...(category ? { category } : {}),
+      ...(priority ? { priority } : {}),
+      ...(assigneeId ? { assigneeId } : {}),
+    };
+
+    const [rows, total] = await Promise.all([
+      this.prisma.ticket.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.ticket.count({ where }),
+    ]);
+
+    return { items: rows.map((t) => this.toListItem(t)), total, page, pageSize };
+  }
+
+  /** Map a Prisma `Ticket` row to the wire shape (timestamps → ISO strings). */
+  private toListItem(t: TicketRow): TicketListItem {
+    return {
+      id: t.id,
+      subject: t.subject,
+      status: t.status,
+      category: t.category,
+      priority: t.priority,
+      requesterEmail: t.requesterEmail,
+      requesterName: t.requesterName,
+      assigneeId: t.assigneeId,
+      createdAt: t.createdAt.toISOString(),
+      updatedAt: t.updatedAt.toISOString(),
+    };
   }
 }
 

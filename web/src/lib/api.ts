@@ -2,6 +2,7 @@ import axios, { type AxiosRequestConfig } from "axios";
 import type {
   CreateUserInput,
   EditUserInput,
+  TicketListResponse,
   UserListItem,
   UserListResponse,
 } from "@ticketly/shared";
@@ -93,6 +94,38 @@ export async function getUsers(
   if (params.pageSize != null) qs.set("pageSize", String(params.pageSize));
   const query = qs.toString();
   return api<UserListResponse>(`/users${query ? `?${query}` : ""}`, config);
+}
+
+export interface GetTicketsParams {
+  /** Case-insensitive substring match on subject or requester email. */
+  q?: string;
+  /** Optional equality filters (wired into the UI later). */
+  status?: string;
+  category?: string;
+  priority?: string;
+  assigneeId?: string;
+  /** 1-based page number. */
+  page?: number;
+  /** Page size (server clamps to 1–100). */
+  pageSize?: number;
+}
+
+/** Ticket list (server returns newest first). Pass an AbortSignal so the caller
+ *  can cancel in-flight requests when the search query / page changes. */
+export async function getTickets(
+  params: GetTicketsParams = {},
+  config?: AxiosRequestConfig,
+): Promise<TicketListResponse> {
+  const qs = new URLSearchParams();
+  if (params.q) qs.set("q", params.q);
+  if (params.status) qs.set("status", params.status);
+  if (params.category) qs.set("category", params.category);
+  if (params.priority) qs.set("priority", params.priority);
+  if (params.assigneeId) qs.set("assigneeId", params.assigneeId);
+  if (params.page != null) qs.set("page", String(params.page));
+  if (params.pageSize != null) qs.set("pageSize", String(params.pageSize));
+  const query = qs.toString();
+  return api<TicketListResponse>(`/tickets${query ? `?${query}` : ""}`, config);
 }
 
 /** Admin-only user provisioning. Throws `ApiError(status)` (e.g. 409 for a

@@ -58,6 +58,10 @@ export type CreateTicketInput = z.infer<typeof createTicketSchema>;
 
 /** Inbound payload shape for listing/filtering tickets (Phase 2). */
 export const listTicketsQuerySchema = z.object({
+  q: z
+    .string()
+    .trim()
+    .optional(),
   status: ticketStatusEnum.optional(),
   category: ticketCategoryEnum.optional(),
   priority: priorityEnum.optional(),
@@ -67,3 +71,30 @@ export const listTicketsQuerySchema = z.object({
 });
 
 export type ListTicketsQuery = z.infer<typeof listTicketsQuerySchema>;
+
+/**
+ * Ticket list wire shape. Timestamps are ISO strings (Nest serializes `Date` →
+ * ISO); the web consumes these as types only, mirroring `userListItemSchema`.
+ */
+export const ticketListItemSchema = z.object({
+  id: z.number().int(),
+  subject: z.string(),
+  status: ticketStatusEnum,
+  category: ticketCategoryEnum.nullable(),
+  priority: priorityEnum,
+  requesterEmail: z.string(),
+  requesterName: z.string(),
+  assigneeId: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const ticketListResponseSchema = z.object({
+  items: z.array(ticketListItemSchema),
+  total: z.number().int().nonnegative(),
+  page: z.number().int().positive(),
+  pageSize: z.number().int().positive(),
+});
+
+export type TicketListItem = z.infer<typeof ticketListItemSchema>;
+export type TicketListResponse = z.infer<typeof ticketListResponseSchema>;

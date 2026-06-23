@@ -26,6 +26,9 @@ export function AppLayout() {
             <Link to="/" className="hover:text-foreground">
               Dashboard
             </Link>
+            <Link to="/tickets" className="hover:text-foreground">
+              Tickets
+            </Link>
             {session?.user?.role === "admin" && (
               <Link to="/users" className="hover:text-foreground">
                 Users
