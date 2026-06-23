@@ -80,9 +80,9 @@ export function AssigneeSelect({
   const disabled = assigneesQuery.isPending || mutation.isPending;
 
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="flex w-full flex-col items-start gap-1">
       <Select value={value} onValueChange={onValueChange} disabled={disabled}>
-        <SelectTrigger size="sm">
+        <SelectTrigger size="sm" className="w-full">
           <SelectValue placeholder="Unassigned" />
         </SelectTrigger>
         <SelectContent>

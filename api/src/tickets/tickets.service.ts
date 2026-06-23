@@ -194,7 +194,7 @@ export class TicketsService {
     const ticket = await this.prisma.ticket.findUnique({ where: { id }, select: { id: true } });
     if (!ticket) throw new NotFoundException("Ticket not found");
 
-    if (input.assigneeId !== null) {
+    if (input.assigneeId !== undefined && input.assigneeId !== null) {
       const assignee = await this.prisma.user.findUnique({
         where: { id: input.assigneeId },
         select: { deletedAt: true },
@@ -204,7 +204,17 @@ export class TicketsService {
       }
     }
 
-    await this.prisma.ticket.update({ where: { id }, data: { assigneeId: input.assigneeId } });
+    // Partial update — only the fields the client sent. `undefined` = leave
+    // unchanged; `null` = clear (unassign / uncategory). Mirrors the conditional
+    // spread used to build `where` in list(); invalid enum values were already
+    // rejected by the Zod parse in the controller.
+    const data = {
+      ...(input.assigneeId !== undefined ? { assigneeId: input.assigneeId } : {}),
+      ...(input.status !== undefined ? { status: input.status } : {}),
+      ...(input.category !== undefined ? { category: input.category } : {}),
+    };
+
+    await this.prisma.ticket.update({ where: { id }, data });
     return this.findOne(id);
   }
 

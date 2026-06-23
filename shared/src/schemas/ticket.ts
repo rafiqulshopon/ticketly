@@ -155,12 +155,15 @@ export const ticketDetailSchema = z.object({
 export type TicketDetail = z.infer<typeof ticketDetailSchema>;
 
 /**
- * Update payload for a ticket. Today only `assigneeId` is updatable (set to a
- * staff user id, or `null` to unassign); the shape is generic so status/priority
- * can be added later. Drives the PATCH /tickets/:id body parse.
+ * Partial update payload for a ticket — every field is optional, so a PATCH can
+ * change one field without touching the others (`undefined` = leave unchanged).
+ * `assigneeId`/`category` are nullable (`null` = unassign / clear category).
+ * Invalid enum values are rejected by Zod at parse time. Drives PATCH /tickets/:id.
  */
 export const updateTicketSchema = z.object({
-  assigneeId: z.string().nullable(),
+  assigneeId: z.string().nullable().optional(),
+  status: ticketStatusEnum.optional(),
+  category: ticketCategoryEnum.nullable().optional(),
 });
 
 export type UpdateTicketInput = z.infer<typeof updateTicketSchema>;

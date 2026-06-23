@@ -1,7 +1,7 @@
 import { type ComponentProps, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import type { TicketDetail, TicketMessage } from "@ticketly/shared";
+import { ticketCategoryEnum, type TicketDetail, type TicketMessage } from "@ticketly/shared";
 import { ApiError, getTicket } from "@/lib/api";
 import {
   Badge,
@@ -13,11 +13,8 @@ import {
   Skeleton,
 } from "@/components/ui";
 import { AssigneeSelect } from "@/components/tickets/assignee-select";
-import {
-  PRIORITY_BADGES,
-  STATUS_BADGES,
-  prettifyEnum,
-} from "@/components/tickets/tickets-table";
+import { PropertySelect } from "@/components/tickets/property-select";
+import { PRIORITY_BADGES, STATUS_BADGES, prettifyEnum } from "@/components/tickets/tickets-table";
 
 const dateFmt = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
@@ -41,6 +38,11 @@ const MESSAGE_DIRECTION: Record<TicketMessage["direction"], { label: string; var
   inbound: { label: "Inbound", variant: "secondary" },
   outbound: { label: "Outbound", variant: "default" },
 };
+
+// Select options derived from the existing badge map / enum — no re-hardcoded
+// labels, and they match the table's badges exactly.
+const STATUS_OPTIONS = Object.entries(STATUS_BADGES).map(([value, { label }]) => ({ value, label }));
+const CATEGORY_OPTIONS = ticketCategoryEnum.options.map((value) => ({ value, label: prettifyEnum(value) }));
 
 export function TicketDetailsPage() {
   const { id: idParam } = useParams<{ id: string }>();
@@ -70,65 +72,31 @@ export function TicketDetailsPage() {
           </CardContent>
         </Card>
       ) : data ? (
-        <>
-          <TicketDetailCard ticket={data} />
-          <ConversationCard messages={data.messages} />
-        </>
+        // Two-column on large screens: conversation thread (2/3) + sticky
+        // properties sidebar (1/3). Stacks on narrow screens.
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="space-y-4 lg:col-span-2">
+            <TicketHeader ticket={data} />
+            <ConversationCard messages={data.messages} />
+          </div>
+          <aside className="self-start lg:col-span-1 lg:sticky lg:top-8">
+            <PropertiesCard ticket={data} />
+          </aside>
+        </div>
       ) : null}
     </div>
   );
 }
 
-function TicketDetailCard({ ticket }: { ticket: TicketDetail }) {
+function TicketHeader({ ticket }: { ticket: TicketDetail }) {
   return (
-    <Card>
-      <CardHeader className="gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={STATUS_BADGES[ticket.status].variant}>
-            {STATUS_BADGES[ticket.status].label}
-          </Badge>
-          <Badge variant={PRIORITY_BADGES[ticket.priority].variant}>
-            {PRIORITY_BADGES[ticket.priority].label}
-          </Badge>
-        </div>
-        <CardTitle className="text-2xl font-semibold tracking-tight">
-          {ticket.subject}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="divide-y">
-        <Row label="Ticket ID" value={`#${ticket.id}`} />
-        <Row
-          label="Requester"
-          value={
-            <span>
-              {ticket.requesterName}
-              <span className="text-muted-foreground"> · {ticket.requesterEmail}</span>
-            </span>
-          }
-        />
-        <Row label="Assignee" value={<AssigneeSelect ticketId={ticket.id} assigneeId={ticket.assigneeId} />} />
-        <Row
-          label="Category"
-          value={
-            ticket.category ? (
-              <Badge variant="outline">{prettifyEnum(ticket.category)}</Badge>
-            ) : (
-              <span className="text-muted-foreground">—</span>
-            )
-          }
-        />
-        <Row label="Created" value={dateFmt.format(new Date(ticket.createdAt))} />
-        <Row label="Updated" value={dateFmt.format(new Date(ticket.updatedAt))} />
-      </CardContent>
-    </Card>
-  );
-}
-
-function Row({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-4 py-3 text-sm">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="text-right text-foreground">{value}</dd>
+    <div className="space-y-1">
+      <div className="text-xs font-medium text-muted-foreground">Ticket #{ticket.id}</div>
+      <h1 className="text-2xl font-semibold tracking-tight text-foreground">{ticket.subject}</h1>
+      <div className="text-sm text-muted-foreground">
+        <span className="text-foreground">{ticket.requesterName}</span>
+        <span> · {ticket.requesterEmail}</span>
+      </div>
     </div>
   );
 }
@@ -139,11 +107,15 @@ function ConversationCard({ messages }: { messages: TicketMessage[] }) {
       <CardHeader>
         <CardTitle className="text-base font-semibold">Conversation</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent>
         {messages.length === 0 ? (
           <p className="text-sm text-muted-foreground">No messages yet.</p>
         ) : (
-          messages.map((message) => <MessageItem key={message.id} message={message} />)
+          <div className="flex flex-col gap-4">
+            {messages.map((message) => (
+              <MessageItem key={message.id} message={message} />
+            ))}
+          </div>
         )}
       </CardContent>
     </Card>
@@ -157,38 +129,123 @@ function MessageItem({ message }: { message: TicketMessage }) {
   // agent (senderName), replying to the requester (toEmail).
   const author = isInbound ? message.fromEmail : message.senderName ?? "Support team";
   return (
-    <div className="rounded-lg border bg-card p-4">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={meta.variant}>{meta.label}</Badge>
-          <span className="text-sm font-medium text-foreground">{author}</span>
-          {!isInbound && <span className="text-sm text-muted-foreground">→ {message.toEmail}</span>}
-        </div>
-        <span className="text-xs text-muted-foreground">{dateFmt.format(new Date(message.createdAt))}</span>
+    <div className={`flex flex-col gap-1 ${isInbound ? "items-start" : "items-end"}`}>
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Badge variant={meta.variant}>{meta.label}</Badge>
+        <span className="font-medium text-foreground">{author}</span>
+        {!isInbound && <span>→ {message.toEmail}</span>}
       </div>
-      <p className="whitespace-pre-wrap text-sm text-foreground">{message.bodyText}</p>
+      <p
+        className={`max-w-[80%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm ${
+          isInbound ? "bg-muted text-foreground" : "bg-primary text-primary-foreground"
+        }`}
+      >
+        {message.bodyText}
+      </p>
+      <span className="text-xs text-muted-foreground">{dateFmt.format(new Date(message.createdAt))}</span>
+    </div>
+  );
+}
+
+function PropertiesCard({ ticket }: { ticket: TicketDetail }) {
+  const priority = PRIORITY_BADGES[ticket.priority];
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base font-semibold">Properties</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <Cell label="Status">
+          <PropertySelect
+            ticketId={ticket.id}
+            field="status"
+            value={ticket.status}
+            options={STATUS_OPTIONS}
+          />
+        </Cell>
+        <Cell label="Priority">
+          {/* Read-only — status/category/assignee are the editable fields. */}
+          <Badge variant={priority.variant}>{priority.label}</Badge>
+        </Cell>
+        <Cell label="Assignee">
+          <AssigneeSelect ticketId={ticket.id} assigneeId={ticket.assigneeId} />
+        </Cell>
+        <Cell label="Category">
+          <PropertySelect
+            ticketId={ticket.id}
+            field="category"
+            value={ticket.category}
+            options={CATEGORY_OPTIONS}
+            allowNull
+            noneLabel="No category"
+          />
+        </Cell>
+
+        <dl className="space-y-3 border-t pt-4 text-sm">
+          <MetaRow label="Ticket ID" value={`#${ticket.id}`} />
+          <MetaRow label="Created" value={dateFmt.format(new Date(ticket.createdAt))} />
+          <MetaRow label="Updated" value={dateFmt.format(new Date(ticket.updatedAt))} />
+        </dl>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** A labeled property cell: muted label stacked over a full-width control. */
+function Cell({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <div className="text-xs font-medium text-muted-foreground">{label}</div>
+      {children}
+    </div>
+  );
+}
+
+/** A read-only label/value metadata row (definition list). */
+function MetaRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="text-right text-foreground">{value}</dd>
     </div>
   );
 }
 
 function DetailSkeleton() {
   return (
-    <Card>
-      <CardHeader className="gap-3">
-        <div className="flex gap-2">
-          <Skeleton className="h-5 w-16 rounded-full" />
-          <Skeleton className="h-5 w-14 rounded-full" />
+    <div className="grid gap-4 lg:grid-cols-3">
+      <div className="space-y-4 lg:col-span-2">
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-20" />
+          <Skeleton className="h-7 w-2/3" />
+          <Skeleton className="h-4 w-1/2" />
         </div>
-        <Skeleton className="h-7 w-2/3" />
-      </CardHeader>
-      <CardContent className="divide-y">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="flex items-center justify-between py-3">
-            <Skeleton className="h-4 w-20" />
-            <Skeleton className="h-4 w-40" />
-          </div>
-        ))}
-      </CardContent>
-    </Card>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-5 w-32" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {Array.from({ length: 2 }).map((_, i) => (
+              <Skeleton key={i} className="h-20 w-full" />
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+      <aside className="lg:col-span-1">
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-5 w-28" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-2">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-8 w-full" />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </aside>
+    </div>
   );
 }
