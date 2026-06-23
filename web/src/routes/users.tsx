@@ -3,8 +3,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { UserListItem } from "@ticketly/shared";
 import { ApiError, getUsers } from "@/lib/api";
 import { Button, Input } from "@/components/ui";
-import { CreateUserDialog } from "@/components/users/create-user-dialog";
-import { EditUserDialog } from "@/components/users/edit-user-dialog";
+import { UserFormDialog } from "@/components/users/user-form-dialog";
 import { UsersTable } from "@/components/users/users-table";
 
 const PAGE_SIZE = 20;
@@ -79,8 +78,10 @@ export function UsersPage() {
         onEditUser={setEditingUser}
       />
 
-      <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} />
-      <EditUserDialog
+      <UserFormDialog mode="create" open={createOpen} onOpenChange={setCreateOpen} />
+
+      <UserFormDialog
+        mode="edit"
         user={editingUser}
         open={!!editingUser}
         onOpenChange={(o) => {
