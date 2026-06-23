@@ -1,5 +1,10 @@
 import axios, { type AxiosRequestConfig } from "axios";
-import type { CreateUserInput, UserListItem, UserListResponse } from "@ticketly/shared";
+import type {
+  CreateUserInput,
+  EditUserInput,
+  UserListItem,
+  UserListResponse,
+} from "@ticketly/shared";
 
 /**
  * Backend origin (no /api suffix). Empty in dev → requests are same-origin and
@@ -94,4 +99,11 @@ export async function getUsers(
  *  duplicate email) on failure; the shared schema validates the payload. */
 export async function createUser(input: CreateUserInput): Promise<UserListItem> {
   return api<UserListItem>("/users", { method: "POST", data: input });
+}
+
+/** Admin-only user update. `password` is optional — leave empty to keep it
+ *  unchanged. Throws `ApiError(status)` (e.g. 409 duplicate email, 404 not
+ *  found) on failure. */
+export async function updateUser(id: string, input: EditUserInput): Promise<UserListItem> {
+  return api<UserListItem>(`/users/${encodeURIComponent(id)}`, { method: "PATCH", data: input });
 }

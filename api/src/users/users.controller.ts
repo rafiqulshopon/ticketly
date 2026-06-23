@@ -1,7 +1,23 @@
-import { BadRequestException, Body, Controller, Get, Post, Query } from "@nestjs/common";
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+} from "@nestjs/common";
+import type { Request } from "express";
 import { Roles } from "@thallesp/nestjs-better-auth";
 import { ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
-import { createUserSchema, type CreateUserInput } from "@ticketly/shared";
+import {
+  createUserSchema,
+  editUserSchema,
+  type CreateUserInput,
+  type EditUserInput,
+} from "@ticketly/shared";
 import { z } from "zod";
 import { UsersService } from "./users.service";
 
@@ -46,6 +62,20 @@ export class UsersController {
       throw new BadRequestException("Invalid user data");
     }
     return this.users.create(input);
+  }
+
+  @ApiOperation({ summary: "Update a user (admin only)" })
+  @Patch(":id")
+  update(@Param("id") id: string, @Body() body: unknown, @Req() req: Request) {
+    let input: EditUserInput;
+    try {
+      input = editUserSchema.parse(body);
+    } catch {
+      throw new BadRequestException("Invalid user data");
+    }
+    // Forward the request headers (session cookie) — Better Auth's admin update/
+    // set-password endpoints require the caller's session, unlike createUser.
+    return this.users.update(id, input, req.headers);
   }
 }
 

@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import type { UserListItem } from "@ticketly/shared";
 import { ApiError, getUsers } from "@/lib/api";
 import { Button, Input } from "@/components/ui";
 import { CreateUserDialog } from "@/components/users/create-user-dialog";
+import { EditUserDialog } from "@/components/users/edit-user-dialog";
 import { UsersTable } from "@/components/users/users-table";
 
 const PAGE_SIZE = 20;
@@ -16,6 +18,7 @@ export function UsersPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserListItem | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -73,9 +76,17 @@ export function UsersPage() {
         pageSize={PAGE_SIZE}
         onRefetch={() => void refetch()}
         onPageChange={setPage}
+        onEditUser={setEditingUser}
       />
 
       <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <EditUserDialog
+        user={editingUser}
+        open={!!editingUser}
+        onOpenChange={(o) => {
+          if (!o) setEditingUser(null);
+        }}
+      />
     </div>
   );
 }

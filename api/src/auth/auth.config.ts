@@ -39,17 +39,18 @@ export const auth = betterAuth({
   // Required for Better Auth's origin/CSRF check (separate from the CORS
   // headers applied in main.ts). Mirrors the CORS origin allowlist.
   trustedOrigins: (process.env.WEB_ORIGIN ?? "http://localhost:5173").split(","),
-  // Rate limiting. Better Auth enables this in production only by default; we force
-  // it on so dev/staging are protected too (in-memory store resets on restart, so dev
-  // friction is minimal). The default rule is 100 req / 10s; sign-in is tightened via
+  // Rate limiting — temporarily disabled. To re-enable, un-comment the block below.
+  // Better Auth enables this in production only by default; we force it on so
+  // dev/staging are protected too (in-memory store resets on restart, so dev friction
+  // is minimal). The default rule is 100 req / 10s; sign-in is tightened via
   // customRules to throttle brute-force / credential-stuffing of the known bootstrap
   // admin email — 5 attempts / 15 min per client IP (override per env as needed).
-  rateLimit: {
-    enabled: true,
-    customRules: {
-      "/sign-in/email": { window: 900, max: 5 },
-    },
-  },
+  // rateLimit: {
+  //   enabled: true,
+  //   customRules: {
+  //     "/sign-in/email": { window: 900, max: 5 },
+  //   },
+  // },
   // defaultRole "agent" aligns with the Role enum; admins are set via seed/createUser.
   plugins: [admin({ defaultRole: "agent" })],
 });

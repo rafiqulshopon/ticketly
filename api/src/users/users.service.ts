@@ -1,5 +1,11 @@
-import { BadRequestException, ConflictException, Injectable } from "@nestjs/common";
-import type { CreateUserInput, UserListItem, UserListResponse } from "@ticketly/shared";
+import {
+  BadRequestException,
+  ConflictException,
+  HttpException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import type { CreateUserInput, EditUserInput, UserListItem, UserListResponse } from "@ticketly/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { auth } from "../auth/auth.config";
 import type { User } from "../generated/prisma/client";
@@ -76,6 +82,87 @@ export class UsersService {
       throw new Error("User was not persisted after creation");
     }
     return this.toListItem(created);
+  }
+
+  /**
+   * Update an existing user's name/email, and optionally reset their password
+   * (only when `input.password` is non-empty). The Better Auth admin endpoints
+   * require the caller's session, so the request `headers` (the session cookie)
+   * are forwarded into both calls.
+   */
+  async update(
+    id: string,
+    input: EditUserInput,
+    headers: Record<string, string | string[] | undefined>,
+  ): Promise<UserListItem> {
+    const current = await this.prisma.user.findUnique({ where: { id } });
+    if (!current) {
+      throw new NotFoundException("User not found");
+    }
+
+    // Duplicate-email pre-check → 409, consistent with create(), before Better Auth.
+    if (input.email !== current.email) {
+      const clash = await this.prisma.user.findUnique({ where: { email: input.email } });
+      if (clash) {
+        throw new ConflictException("Email already in use");
+      }
+    }
+
+    // Better Auth's `headers` option is typed as HeadersInit (Record<string,string>);
+    // Express header values can be string[]/undefined, so narrow once here.
+    const requestHeaders = headers as Record<string, string>;
+
+    // name/email are always present (required) so `data` is never empty.
+    await this.callAuth(() =>
+      auth.api.adminUpdateUser({
+        body: { userId: id, data: { name: input.name, email: input.email } },
+        headers: requestHeaders,
+      }),
+    );
+
+    const newPassword = input.password;
+    if (newPassword) {
+      await this.callAuth(() =>
+        auth.api.setUserPassword({
+          body: { userId: id, newPassword },
+          headers: requestHeaders,
+        }),
+      );
+    }
+
+    const updated = await this.prisma.user.findUnique({ where: { id } });
+    if (!updated) {
+      throw new Error("User vanished after update");
+    }
+    return this.toListItem(updated);
+  }
+
+  /**
+   * Run a server-side Better Auth call and map its `APIError` (duck-typed on a
+   * numeric `statusCode`) to a NestJS HttpException so the status survives.
+   * Avoids importing the error class by a specific path.
+   */
+  private async callAuth<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn();
+    } catch (err) {
+      if (
+        err &&
+        typeof err === "object" &&
+        typeof (err as { statusCode?: unknown }).statusCode === "number"
+      ) {
+        const e = err as {
+          statusCode: number;
+          body?: { message?: string; code?: string };
+          message?: string;
+        };
+        throw new HttpException(
+          { message: e.body?.message ?? e.message ?? "Auth error", code: e.body?.code },
+          e.statusCode,
+        );
+      }
+      throw err;
+    }
   }
 
   /** Map a Prisma `User` row to the wire shape (timestamps → ISO strings). */
