@@ -1,4 +1,14 @@
-import { type ComponentProps } from "react";
+import { type ComponentProps, type ReactNode } from "react";
+import {
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+  type Column,
+  type ColumnDef,
+  type OnChangeFn,
+  type SortingState,
+} from "@tanstack/react-table";
+import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import type { TicketListItem, TicketListResponse } from "@ticketly/shared";
 import { ApiError } from "@/lib/api";
 import {
@@ -64,6 +74,108 @@ function PriorityBadge({ priority }: { priority: TicketListItem["priority"] }) {
   return <Badge variant={variant}>{label}</Badge>;
 }
 
+/**
+ * Per-column layout overrides keyed by column id (object map, no switch): the ID
+ * column gets left padding and the Created column is right-aligned, matching the
+ * original table. Other columns use the shadcn defaults.
+ */
+const COLUMN_LAYOUT: Partial<Record<string, string>> = {
+  id: "pl-4",
+  createdAt: "pr-4 text-right",
+};
+
+function SortIcon({ sorted }: { sorted: false | "asc" | "desc" }) {
+  if (sorted === "asc") return <ArrowUp className="size-3.5" />;
+  if (sorted === "desc") return <ArrowDown className="size-3.5" />;
+  return <ChevronsUpDown className="size-3.5 opacity-50" />;
+}
+
+/**
+ * Clickable column header that toggles the server sort via
+ * `column.getToggleSortingHandler()`. The active column is highlighted
+ * (text-foreground); inactive sortable columns show a faint ChevronsUpDown hint.
+ */
+function SortHeader({
+  column,
+  children,
+}: {
+  column: Column<TicketListItem, unknown>;
+  children: ReactNode;
+}) {
+  const sorted = column.getIsSorted();
+  const active = sorted !== false;
+  return (
+    <button
+      type="button"
+      className={`inline-flex items-center gap-1 text-left font-medium ${
+        active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+      }`}
+      onClick={column.getToggleSortingHandler()}
+    >
+      {children}
+      <SortIcon sorted={sorted} />
+    </button>
+  );
+}
+
+// Column ids match the shared `sortBy` enum and the Prisma field names exactly,
+// so the same string flows: TanStack column id → wire param → server ORDER BY.
+// Priority/category/id are non-sortable (alphabetical enum sort is misleading).
+const columns: ColumnDef<TicketListItem>[] = [
+  {
+    id: "id",
+    enableSorting: false,
+    header: "ID",
+    cell: ({ row }) => <span className="text-muted-foreground">#{row.original.id}</span>,
+  },
+  {
+    accessorKey: "subject",
+    header: ({ column }) => <SortHeader column={column}>Subject</SortHeader>,
+    cell: ({ row }) => <span className="font-medium text-foreground">{row.original.subject}</span>,
+  },
+  {
+    accessorKey: "requesterName",
+    header: ({ column }) => <SortHeader column={column}>Requester</SortHeader>,
+    cell: ({ row }) => (
+      <div className="flex flex-col">
+        <span className="text-foreground">{row.original.requesterName}</span>
+        <span className="text-xs text-muted-foreground">{row.original.requesterEmail}</span>
+      </div>
+    ),
+  },
+  {
+    accessorKey: "status",
+    header: ({ column }) => <SortHeader column={column}>Status</SortHeader>,
+    cell: ({ row }) => <StatusBadge status={row.original.status} />,
+  },
+  {
+    id: "category",
+    enableSorting: false,
+    header: "Category",
+    cell: ({ row }) =>
+      row.original.category ? (
+        <Badge variant="outline">{prettifyEnum(row.original.category)}</Badge>
+      ) : (
+        <span className="text-sm text-muted-foreground">—</span>
+      ),
+  },
+  {
+    id: "priority",
+    enableSorting: false,
+    header: "Priority",
+    cell: ({ row }) => <PriorityBadge priority={row.original.priority} />,
+  },
+  {
+    accessorKey: "createdAt",
+    // Dates read newest-first by default when first sorted.
+    sortDescFirst: true,
+    header: ({ column }) => <SortHeader column={column}>Created</SortHeader>,
+    cell: ({ row }) => (
+      <span className="text-muted-foreground">{dateFmt.format(new Date(row.original.createdAt))}</span>
+    ),
+  },
+];
+
 export interface TicketsTableProps {
   data: TicketListResponse | undefined;
   isPending: boolean;
@@ -72,6 +184,9 @@ export interface TicketsTableProps {
   error: unknown;
   /** Current search term, used only for the empty-state message. */
   search: string;
+  /** Controlled sort state (single-column, server-authoritative). */
+  sorting: SortingState;
+  onSortingChange: OnChangeFn<SortingState>;
   page: number;
   pageSize: number;
   onRefetch: () => void;
@@ -79,10 +194,12 @@ export interface TicketsTableProps {
 }
 
 /**
- * Presentational ticket list: loading skeleton / error / empty / rows, plus
- * pagination. All data fetching and search/page state live in the page
- * (`routes/tickets.tsx`); this component just renders it. Newest first is
- * enforced by the API (`createdAt DESC`) — the table renders rows in order.
+ * Presentational ticket list built on TanStack Table with server-side
+ * (`manual`) sorting. Sorting is controlled by the page: `sorting` +
+ * `onSortingChange` flow up to the query key and the API request, and the server
+ * performs the actual `ORDER BY` — TanStack only manages sort state + the
+ * header indicators. Loading skeleton / error / empty states and pagination are
+ * rendered as before.
  */
 export function TicketsTable({
   data,
@@ -91,11 +208,24 @@ export function TicketsTable({
   isError,
   error,
   search,
+  sorting,
+  onSortingChange,
   page,
   pageSize,
   onRefetch,
   onPageChange,
 }: TicketsTableProps) {
+  const table = useReactTable({
+    data: data?.items ?? [],
+    columns,
+    state: { sorting },
+    onSortingChange,
+    manualSorting: true,
+    enableSortingRemoval: false,
+    enableMultiSort: false,
+    getCoreRowModel: getCoreRowModel(),
+  });
+
   const total = data?.total ?? 0;
   const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const end = Math.min(page * pageSize, total);
@@ -106,22 +236,24 @@ export function TicketsTable({
     <Card className="overflow-hidden">
       <Table>
         <TableHeader>
-          <TableRow>
-            <TableHead className="pl-4">ID</TableHead>
-            <TableHead>Subject</TableHead>
-            <TableHead>Requester</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Category</TableHead>
-            <TableHead>Priority</TableHead>
-            <TableHead className="pr-4 text-right">Created</TableHead>
-          </TableRow>
+          {table.getHeaderGroups().map((headerGroup) => (
+            <TableRow key={headerGroup.id}>
+              {headerGroup.headers.map((header) => (
+                <TableHead key={header.id} className={COLUMN_LAYOUT[header.column.id] ?? ""}>
+                  {header.isPlaceholder
+                    ? null
+                    : flexRender(header.column.columnDef.header, header.getContext())}
+                </TableHead>
+              ))}
+            </TableRow>
+          ))}
         </TableHeader>
         <TableBody>
           {isPending ? (
             <SkeletonRows />
           ) : isError ? (
             <TableRow>
-              <TableCell colSpan={7} className="h-32 text-center">
+              <TableCell colSpan={columns.length} className="h-32 text-center">
                 <div className="flex flex-col items-center gap-3 text-sm text-muted-foreground">
                   <span>{toErrorMessage(error)}</span>
                   <Button variant="outline" size="sm" onClick={onRefetch}>
@@ -131,10 +263,18 @@ export function TicketsTable({
               </TableCell>
             </TableRow>
           ) : data && data.items.length > 0 ? (
-            data.items.map((t) => <TicketRow key={t.id} ticket={t} />)
+            table.getRowModel().rows.map((row) => (
+              <TableRow key={row.id}>
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell key={cell.id} className={COLUMN_LAYOUT[cell.column.id] ?? ""}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
           ) : (
             <TableRow>
-              <TableCell colSpan={7} className="h-24 text-center text-sm text-muted-foreground">
+              <TableCell colSpan={columns.length} className="h-24 text-center text-sm text-muted-foreground">
                 {search ? `No tickets match “${search}”.` : "No tickets yet."}
               </TableCell>
             </TableRow>
@@ -167,37 +307,6 @@ export function TicketsTable({
         </div>
       </div>
     </Card>
-  );
-}
-
-function TicketRow({ ticket }: { ticket: TicketListItem }) {
-  return (
-    <TableRow>
-      <TableCell className="pl-4 text-muted-foreground">#{ticket.id}</TableCell>
-      <TableCell className="font-medium text-foreground">{ticket.subject}</TableCell>
-      <TableCell>
-        <div className="flex flex-col">
-          <span className="text-foreground">{ticket.requesterName}</span>
-          <span className="text-xs text-muted-foreground">{ticket.requesterEmail}</span>
-        </div>
-      </TableCell>
-      <TableCell>
-        <StatusBadge status={ticket.status} />
-      </TableCell>
-      <TableCell>
-        {ticket.category ? (
-          <Badge variant="outline">{prettifyEnum(ticket.category)}</Badge>
-        ) : (
-          <span className="text-sm text-muted-foreground">—</span>
-        )}
-      </TableCell>
-      <TableCell>
-        <PriorityBadge priority={ticket.priority} />
-      </TableCell>
-      <TableCell className="pr-4 text-right text-muted-foreground">
-        {dateFmt.format(new Date(ticket.createdAt))}
-      </TableCell>
-    </TableRow>
   );
 }
 

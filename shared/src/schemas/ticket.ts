@@ -66,6 +66,12 @@ export const listTicketsQuerySchema = z.object({
   category: ticketCategoryEnum.optional(),
   priority: priorityEnum.optional(),
   assigneeId: z.string().optional(),
+  // Sortable columns are a closed enum — the values are the column ids everywhere
+  // (TanStack column id, the wire param, and the backend Prisma field name).
+  // Priority/category/id are intentionally excluded (alphabetical enum sort is
+  // misleading); severity-weighted priority sort is a separate future task.
+  sortBy: z.enum(["createdAt", "subject", "requesterName", "status"]).default("createdAt"),
+  sortDir: z.enum(["asc", "desc"]).default("desc"),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(25),
 });

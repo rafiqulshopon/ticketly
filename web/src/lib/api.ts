@@ -104,6 +104,10 @@ export interface GetTicketsParams {
   category?: string;
   priority?: string;
   assigneeId?: string;
+  /** Sort column — createdAt | subject | requesterName | status (server default: createdAt; server 400s on others). */
+  sortBy?: string;
+  /** Sort direction — "asc" | "desc" (server default: desc). */
+  sortDir?: string;
   /** 1-based page number. */
   page?: number;
   /** Page size (server clamps to 1–100). */
@@ -122,6 +126,8 @@ export async function getTickets(
   if (params.category) qs.set("category", params.category);
   if (params.priority) qs.set("priority", params.priority);
   if (params.assigneeId) qs.set("assigneeId", params.assigneeId);
+  if (params.sortBy) qs.set("sortBy", params.sortBy);
+  if (params.sortDir) qs.set("sortDir", params.sortDir);
   if (params.page != null) qs.set("page", String(params.page));
   if (params.pageSize != null) qs.set("pageSize", String(params.pageSize));
   const query = qs.toString();

@@ -87,13 +87,14 @@ export class TicketsService {
   }
 
   /**
-   * Ticket list, newest first (`createdAt DESC`). `q` is a case-insensitive
-   * substring match on subject or requester email; status/category/priority/
-   * assigneeId are optional equality filters (wired into the UI later). All
-   * staff see all tickets here — no assignee scoping (shared inbox).
+   * Ticket list, server-sorted by the requested column (default `createdAt`
+   * DESC = newest first). `q` is a case-insensitive substring match on subject
+   * or requester email; status/category/priority/assigneeId are optional
+   * equality filters (wired into the UI later). All staff see all tickets here
+   * — no assignee scoping (shared inbox).
    */
   async list(opts: ListTicketsQuery): Promise<TicketListResponse> {
-    const { q, status, category, priority, assigneeId, page, pageSize } = opts;
+    const { q, status, category, priority, assigneeId, sortBy, sortDir, page, pageSize } = opts;
     const where = {
       ...(q
         ? {
@@ -109,10 +110,20 @@ export class TicketsService {
       ...(assigneeId ? { assigneeId } : {}),
     };
 
+    // Closed whitelist: only the four allowed columns reach Prisma's orderBy —
+    // never an arbitrary key from the query string. Each branch is a valid Prisma
+    // orderBy literal, so indexing by the enum-typed `sortBy` is fully type-safe.
+    const orderBy = {
+      createdAt: { createdAt: sortDir },
+      subject: { subject: sortDir },
+      requesterName: { requesterName: sortDir },
+      status: { status: sortDir },
+    }[sortBy];
+
     const [rows, total] = await Promise.all([
       this.prisma.ticket.findMany({
         where,
-        orderBy: { createdAt: "desc" },
+        orderBy,
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),

@@ -23,12 +23,24 @@ import { TicketsService } from "./tickets.service";
 export class TicketsController {
   constructor(private readonly tickets: TicketsService) {}
 
-  @ApiOperation({ summary: "List tickets (newest first)" })
+  @ApiOperation({ summary: "List tickets (server-sorted)" })
   @ApiQuery({ name: "q", required: false, description: "Case-insensitive search on subject or requester email" })
   @ApiQuery({ name: "status", required: false })
   @ApiQuery({ name: "category", required: false })
   @ApiQuery({ name: "priority", required: false })
   @ApiQuery({ name: "assigneeId", required: false })
+  @ApiQuery({
+    name: "sortBy",
+    required: false,
+    enum: ["createdAt", "subject", "requesterName", "status"],
+    description: "Sort column (default createdAt)",
+  })
+  @ApiQuery({
+    name: "sortDir",
+    required: false,
+    enum: ["asc", "desc"],
+    description: "Sort direction (default desc)",
+  })
   @ApiQuery({ name: "page", required: false, type: Number, description: "1-based page (default 1)" })
   @ApiQuery({ name: "pageSize", required: false, type: Number, description: "Page size, 1–100 (default 25)" })
   @Get()

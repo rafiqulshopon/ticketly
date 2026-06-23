@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { type OnChangeFn, type SortingState } from "@tanstack/react-table";
 import { ApiError, getTickets } from "@/lib/api";
 import { Input } from "@/components/ui";
 import { TicketsTable } from "@/components/tickets/tickets-table";
@@ -14,6 +15,9 @@ export function TicketsPage() {
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  // Server-side sort, newest first by default. The table owns the click UX; this
+  // state drives the query key + the API request so the server does the ORDER BY.
+  const [sorting, setSorting] = useState<SortingState>([{ id: "createdAt", desc: true }]);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -23,14 +27,31 @@ export function TicketsPage() {
     return () => clearTimeout(t);
   }, [query]);
 
-  // TanStack Query owns loading/error/abort state keyed on [search, page]. The
-  // queryFn receives an AbortSignal so superseded requests are cancelled
-  // automatically; keepPreviousData keeps old rows visible while a new page or
-  // search loads instead of flashing skeletons. The server returns newest first.
+  // Changing the sort restarts the listing at page 1 (mirrors the search reset).
+  const handleSortingChange: OnChangeFn<SortingState> = (updater) => {
+    setSorting(updater);
+    setPage(1);
+  };
+
+  const sort = sorting[0];
+
+  // TanStack Query owns loading/error/abort state keyed on [search, page, sorting].
+  // The queryFn receives an AbortSignal so superseded requests are cancelled
+  // automatically; keepPreviousData keeps old rows visible while a new page,
+  // search, or sort loads instead of flashing skeletons. The server sorts.
   const { data, isPending, isFetching, isError, error, refetch } = useQuery({
-    queryKey: ["tickets", search, page],
+    queryKey: ["tickets", search, page, sorting],
     queryFn: ({ signal }) =>
-      getTickets({ q: search || undefined, page, pageSize: PAGE_SIZE }, { signal }),
+      getTickets(
+        {
+          q: search || undefined,
+          page,
+          pageSize: PAGE_SIZE,
+          sortBy: sort?.id,
+          sortDir: sort?.desc ? "desc" : "asc",
+        },
+        { signal },
+      ),
     placeholderData: keepPreviousData,
     retry: (failureCount, err) => !(err instanceof ApiError) && failureCount < 2,
   });
@@ -60,6 +81,8 @@ export function TicketsPage() {
         isError={isError}
         error={error}
         search={search}
+        sorting={sorting}
+        onSortingChange={handleSortingChange}
         page={page}
         pageSize={PAGE_SIZE}
         onRefetch={() => void refetch()}
