@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { UserListResponse } from "@ticketly/shared";
 import { ApiError, getUsers } from "@/lib/api";
 import {
@@ -33,79 +34,34 @@ function toErrorMessage(err: unknown): string {
 }
 
 export function UsersPage() {
-  // `query` is the raw input value; `search` is the debounced value sent to the
-  // API. Typing updates `query` immediately (responsive input) but only triggers
-  // a request once the user pauses.
+  // `query` is the raw input value; `search` is the debounced value used as a
+  // query key. Typing updates the input immediately but only triggers a request
+  // once the user pauses; any search change resets to the first page.
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [reloadKey, setReloadKey] = useState(0);
-  const [data, setData] = useState<UserListResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  // The last search actually committed to the API, so the debounce timer can
-  // bail out when the (trimmed) query hasn't changed — see the note below.
-  const committedSearchRef = useRef("");
-
-  // Debounce the search box; any change resets to the first page. `loading` is
-  // flipped here (inside the timer, not synchronously in the effect) so the
-  // spinner shows while the next request is in flight. We ONLY act when the
-  // trimmed query differs from the committed search: on the initial load
-  // (query "" === search "") the timer would otherwise re-arm the spinner ~300ms
-  // after the first fetch finishes, and because search/page don't change the
-  // fetch effect never re-runs to clear it — leaving a permanent skeleton.
   useEffect(() => {
-    const next = query.trim();
     const t = setTimeout(() => {
-      if (next === committedSearchRef.current) return;
-      committedSearchRef.current = next;
-      setLoading(true);
-      setSearch(next);
+      setSearch(query.trim());
       setPage(1);
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [query]);
 
-  // Fetch whenever the active search / page changes. All setState here runs in
-  // the async continuation (after `await`), never synchronously during render.
-  useEffect(() => {
-    const ctrl = new AbortController();
-    let active = true;
-    (async () => {
-      try {
-        const res = await getUsers(
-          { q: search || undefined, page, pageSize: PAGE_SIZE },
-          { signal: ctrl.signal },
-        );
-        if (!active) return;
-        setData(res);
-        setError(null);
-      } catch (err) {
-        if (!active) return; // superseded by a newer request
-        setError(toErrorMessage(err));
-        setData(null);
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-    return () => {
-      active = false;
-      ctrl.abort();
-    };
-  }, [search, page, reloadKey]);
-
-  // Event-handler setState (not effect) — the rule-compliant place to mark a
-  // fresh load before the fetch effect picks up the new page / reload token.
-  const goToPage = useCallback((next: number) => {
-    setLoading(true);
-    setPage(next);
-  }, []);
-
-  const retry = useCallback(() => {
-    setLoading(true);
-    setReloadKey((k) => k + 1);
-  }, []);
+  // TanStack Query owns loading/error/abort state keyed on [search, page]. The
+  // queryFn receives an AbortSignal so superseded requests (faster new search,
+  // StrictMode remount) are cancelled automatically; keepPreviousData keeps the
+  // old rows visible while a new page/search loads instead of flashing skeletons.
+  const { data, isPending, isFetching, isError, error, refetch } = useQuery({
+    queryKey: ["users", search, page],
+    queryFn: ({ signal }) =>
+      getUsers({ q: search || undefined, page, pageSize: PAGE_SIZE }, { signal }),
+    placeholderData: keepPreviousData,
+    // Don't retry HTTP errors (401/403/5xx won't fix themselves); do retry a
+    // couple of times on transient network failures.
+    retry: (failureCount, err) => !(err instanceof ApiError) && failureCount < 2,
+  });
 
   const total = data?.total ?? 0;
   const start = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
@@ -145,14 +101,14 @@ export function UsersPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading ? (
+            {isPending ? (
               <SkeletonRows />
-            ) : error ? (
+            ) : isError ? (
               <TableRow>
                 <TableCell colSpan={5} className="h-32 text-center">
                   <div className="flex flex-col items-center gap-3 text-sm text-muted-foreground">
-                    <span>{error}</span>
-                    <Button variant="outline" size="sm" onClick={retry}>
+                    <span>{toErrorMessage(error)}</span>
+                    <Button variant="outline" size="sm" onClick={() => void refetch()}>
                       Try again
                     </Button>
                   </div>
@@ -173,22 +129,22 @@ export function UsersPage() {
         {/* Pagination */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-sm text-muted-foreground">
           <span>
-            {loading ? "Loading…" : total === 0 ? "No results" : `Showing ${start}–${end} of ${total}`}
+            {isPending ? "Loading…" : total === 0 ? "No results" : `Showing ${start}–${end} of ${total}`}
           </span>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
-              disabled={!hasPrev || loading}
-              onClick={() => goToPage(Math.max(1, page - 1))}
+              disabled={!hasPrev || isFetching}
+              onClick={() => setPage(Math.max(1, page - 1))}
             >
               Previous
             </Button>
             <Button
               variant="outline"
               size="sm"
-              disabled={!hasNext || loading}
-              onClick={() => goToPage(page + 1)}
+              disabled={!hasNext || isFetching}
+              onClick={() => setPage(page + 1)}
             >
               Next
             </Button>
