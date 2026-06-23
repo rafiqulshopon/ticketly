@@ -1,19 +1,19 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { UserListResponse } from "@ticketly/shared";
 import { ApiError, getUsers } from "@/lib/api";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Badge,
+  Button,
+  Card,
+  Input,
+  Skeleton,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@/components/ui";
 
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -44,13 +44,24 @@ export function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // The last search actually committed to the API, so the debounce timer can
+  // bail out when the (trimmed) query hasn't changed — see the note below.
+  const committedSearchRef = useRef("");
+
   // Debounce the search box; any change resets to the first page. `loading` is
   // flipped here (inside the timer, not synchronously in the effect) so the
-  // spinner shows while the next request is in flight.
+  // spinner shows while the next request is in flight. We ONLY act when the
+  // trimmed query differs from the committed search: on the initial load
+  // (query "" === search "") the timer would otherwise re-arm the spinner ~300ms
+  // after the first fetch finishes, and because search/page don't change the
+  // fetch effect never re-runs to clear it — leaving a permanent skeleton.
   useEffect(() => {
+    const next = query.trim();
     const t = setTimeout(() => {
+      if (next === committedSearchRef.current) return;
+      committedSearchRef.current = next;
       setLoading(true);
-      setSearch(query.trim());
+      setSearch(next);
       setPage(1);
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(t);

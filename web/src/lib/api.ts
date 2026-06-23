@@ -1,3 +1,4 @@
+import axios, { type AxiosRequestConfig } from "axios";
 import type { UserListResponse } from "@ticketly/shared";
 
 /**
@@ -7,6 +8,14 @@ import type { UserListResponse } from "@ticketly/shared";
  * This matches the Better Auth client's baseURL convention in lib/auth.ts.
  */
 const API_ORIGIN = import.meta.env.VITE_API_URL || "";
+
+/** Shared axios instance. `withCredentials` carries the Better Auth session cookie
+ *  on every request; callers can opt out per-call (see getHealth). */
+const http = axios.create({
+  baseURL: API_ORIGIN,
+  withCredentials: true,
+  headers: { "Content-Type": "application/json" },
+});
 
 export class ApiError extends Error {
   constructor(
@@ -18,18 +27,26 @@ export class ApiError extends Error {
   }
 }
 
-/** Thin fetch wrapper. credentials: include carries the Better Auth session cookie.
- *  `path` is the route AFTER the global /api prefix (e.g. "/auth/sign-in"). */
-export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_ORIGIN}/api${path}`, {
-    credentials: "include",
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-    ...init,
-  });
-  if (!res.ok) {
-    throw new ApiError(res.status, `${res.status} ${res.statusText}`);
+/** Convert an axios rejection into our ApiError when there's an HTTP response,
+ *  preserving the status code. Network/abort errors have no response and are
+ *  returned as-is so callers can read the underlying message. */
+function toApiError(err: unknown): Error {
+  if (axios.isAxiosError(err) && err.response) {
+    return new ApiError(err.response.status, `${err.response.status} ${err.response.statusText}`);
   }
-  return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
+  return err instanceof Error ? err : new Error(String(err));
+}
+
+/** Thin axios wrapper. `path` is the route AFTER the global /api prefix
+ *  (e.g. "/users"). Defaults to GET; pass an AxiosRequestConfig to override
+ *  (method/headers/signal/…). Pass `{ signal }` to cancel an in-flight request. */
+export async function api<T>(path: string, config?: AxiosRequestConfig): Promise<T> {
+  try {
+    const res = await http.request<T>({ url: `/api${path}`, method: "GET", ...config });
+    return res.status === 204 ? (undefined as T) : res.data;
+  } catch (err) {
+    throw toApiError(err);
+  }
 }
 
 export interface HealthResponse {
@@ -38,14 +55,16 @@ export interface HealthResponse {
   time: string;
 }
 
-/** Health is served at the API root (excluded from the global /api prefix), not /api/health.
- *  Public endpoint — no credentials needed (don't send the session cookie to it). */
+/** Health is served at the API root (excluded from the global /api prefix), not
+ *  /api/health. Public endpoint — credentials are explicitly disabled here so
+ *  the session cookie isn't sent to it. */
 export async function getHealth(): Promise<HealthResponse> {
-  const res = await fetch(`${API_ORIGIN}/health`);
-  if (!res.ok) {
-    throw new ApiError(res.status, `${res.status} ${res.statusText}`);
+  try {
+    const res = await http.get<HealthResponse>("/health", { withCredentials: false });
+    return res.data;
+  } catch (err) {
+    throw toApiError(err);
   }
-  return (await res.json()) as HealthResponse;
 }
 
 export interface GetUsersParams {
@@ -61,12 +80,12 @@ export interface GetUsersParams {
  *  in-flight requests when the search query / page changes. */
 export async function getUsers(
   params: GetUsersParams = {},
-  init?: RequestInit,
+  config?: AxiosRequestConfig,
 ): Promise<UserListResponse> {
   const qs = new URLSearchParams();
   if (params.q) qs.set("q", params.q);
   if (params.page != null) qs.set("page", String(params.page));
   if (params.pageSize != null) qs.set("pageSize", String(params.pageSize));
   const query = qs.toString();
-  return api<UserListResponse>(`/users${query ? `?${query}` : ""}`, init);
+  return api<UserListResponse>(`/users${query ? `?${query}` : ""}`, config);
 }

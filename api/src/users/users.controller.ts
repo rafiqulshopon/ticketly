@@ -17,8 +17,18 @@ export class UsersController {
 
   @ApiOperation({ summary: "List users (admin only)" })
   @ApiQuery({ name: "q", required: false, description: "Case-insensitive search on email or name" })
-  @ApiQuery({ name: "page", required: false, type: Number, description: "1-based page (default 1)" })
-  @ApiQuery({ name: "pageSize", required: false, type: Number, description: "Page size, 1–100 (default 20)" })
+  @ApiQuery({
+    name: "page",
+    required: false,
+    type: Number,
+    description: "1-based page (default 1)",
+  })
+  @ApiQuery({
+    name: "pageSize",
+    required: false,
+    type: Number,
+    description: "Page size, 1–100 (default 20)",
+  })
   @Get()
   list(@Query() raw: Record<string, string | undefined>) {
     const { q, page, pageSize } = listUsersQuerySchema.parse(raw ?? {});

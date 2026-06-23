@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Outlet, Link, useNavigate } from "react-router-dom";
 import { signOut, useSession } from "@/lib/auth";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui";
 
 export function AppLayout() {
   const { data: session } = useSession();
