@@ -51,6 +51,7 @@ Build ordering matters: **`shared` must build before `api` and `web`** (both imp
 - ESLint 10 flat config in `eslint.config.mjs`; React plugins are registered by hand (ESLint 10 rejects the legacy `plugins: [...]` array form the plugin presets still ship).
 - **Build all UI with [shadcn/ui](https://ui.shadcn.com)** — not hand-rolled primitives or other component libraries. Config is `web/components.json` (`new-york` style, `neutral` base color, CSS variables, lucide icons); generated components live in `web/src/components/ui/`. **Add new ones via the shadcn CLI run from `web/`** (`npx shadcn@latest add <name>`) — they're copied in and can then be edited freely.
 - **Styling uses Tailwind utilities + the design tokens** defined in `web/src/index.css` (`bg-background`, `text-muted-foreground`, `text-destructive`, `border`, etc.) — **never hardcode hex colors**. Compose existing shadcn primitives; don't reinvent them.
+- **Component tests** (Vitest + React Testing Library) live as `*.test.tsx` next to the component. Run `npm test --workspace @ticketly/web` (or `test:watch`). Mock `@/lib/api` (never hit the network); wrap data components in a fresh `QueryClientProvider` with `retry: false`; import from `vitest` explicitly (no globals).
 
 ## Authentication
 
