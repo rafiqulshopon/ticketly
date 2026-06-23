@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Post, Query } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Param, Post, Query } from "@nestjs/common";
 import { Roles } from "@thallesp/nestjs-better-auth";
 import { ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
 import {
@@ -47,6 +47,12 @@ export class TicketsController {
   list(@Query() raw: Record<string, string | undefined>) {
     const query: ListTicketsQuery = listTicketsQuerySchema.parse(raw ?? {});
     return this.tickets.list(query);
+  }
+
+  @ApiOperation({ summary: "Get a single ticket (metadata only)" })
+  @Get(":id")
+  findOne(@Param("id") id: string) {
+    return this.tickets.findOne(Number(id));
   }
 
   @ApiOperation({ summary: "Create a ticket from an inbound request (email-like)" })

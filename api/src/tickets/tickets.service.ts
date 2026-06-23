@@ -1,8 +1,9 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import type {
   CreateTicketInput,
   ListTicketsQuery,
   Ticket,
+  TicketDetail,
   TicketListItem,
   TicketListResponse,
 } from "@ticketly/shared";
@@ -131,6 +132,51 @@ export class TicketsService {
     ]);
 
     return { items: rows.map((t) => this.toListItem(t)), total, page, pageSize };
+  }
+
+  /**
+   * Single ticket by id. Resolves the assignee relation into name/email for
+   * human-readable display and includes the conversation `messages` (oldest
+   * first), each with its staff `sender` name resolved. Unscoped (shared inbox):
+   * all staff see all tickets, matching list(). Throws NotFoundException (404)
+   * when the id doesn't exist.
+   */
+  async findOne(id: number): Promise<TicketDetail> {
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id },
+      include: {
+        assignee: { select: { name: true, email: true } },
+        messages: {
+          orderBy: { createdAt: "asc" },
+          include: { sender: { select: { name: true } } },
+        },
+      },
+    });
+    if (!ticket) throw new NotFoundException("Ticket not found");
+    return {
+      id: ticket.id,
+      subject: ticket.subject,
+      status: ticket.status,
+      category: ticket.category,
+      priority: ticket.priority,
+      requesterEmail: ticket.requesterEmail,
+      requesterName: ticket.requesterName,
+      assigneeName: ticket.assignee ? ticket.assignee.name : null,
+      assigneeEmail: ticket.assignee ? ticket.assignee.email : null,
+      // `direction` is a plain String column; the create path only ever writes
+      // "inbound" | "outbound", so the cast is sound.
+      messages: ticket.messages.map((m) => ({
+        id: m.id,
+        direction: m.direction as "inbound" | "outbound",
+        fromEmail: m.fromEmail,
+        toEmail: m.toEmail,
+        senderName: m.sender ? m.sender.name : null,
+        bodyText: m.bodyText,
+        createdAt: m.createdAt.toISOString(),
+      })),
+      createdAt: ticket.createdAt.toISOString(),
+      updatedAt: ticket.updatedAt.toISOString(),
+    };
   }
 
   /** Map a Prisma `Ticket` row to the wire shape (timestamps → ISO strings). */

@@ -4,6 +4,7 @@ import { RequireAuth } from "@/components/auth/require-auth";
 import { RequireAdmin } from "@/components/auth/require-admin";
 import { DashboardPage } from "@/routes/dashboard";
 import { TicketsPage } from "@/routes/tickets";
+import { TicketDetailsPage } from "@/routes/ticket-details";
 import { UsersPage } from "@/routes/users";
 import { LoginPage } from "@/routes/login";
 
@@ -18,6 +19,7 @@ export default function App() {
           <Route path="/" element={<DashboardPage />} />
           {/* All staff (admin + agent). */}
           <Route path="/tickets" element={<TicketsPage />} />
+          <Route path="/tickets/:id" element={<TicketDetailsPage />} />
           {/* Admin-only routes. */}
           <Route element={<RequireAdmin />}>
             <Route path="/users" element={<UsersPage />} />

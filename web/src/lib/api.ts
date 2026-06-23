@@ -2,6 +2,7 @@ import axios, { type AxiosRequestConfig } from "axios";
 import type {
   CreateUserInput,
   EditUserInput,
+  TicketDetail,
   TicketListResponse,
   UserListItem,
   UserListResponse,
@@ -132,6 +133,13 @@ export async function getTickets(
   if (params.pageSize != null) qs.set("pageSize", String(params.pageSize));
   const query = qs.toString();
   return api<TicketListResponse>(`/tickets${query ? `?${query}` : ""}`, config);
+}
+
+/** Single ticket (metadata only). Throws `ApiError(status)` (e.g. 404 when the id
+ *  doesn't exist) on failure. Pass an AbortSignal so the caller can cancel when
+ *  navigating away. */
+export async function getTicket(id: number, config?: AxiosRequestConfig): Promise<TicketDetail> {
+  return api<TicketDetail>(`/tickets/${encodeURIComponent(id)}`, config);
 }
 
 /** Admin-only user provisioning. Throws `ApiError(status)` (e.g. 409 for a

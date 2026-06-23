@@ -104,3 +104,50 @@ export const ticketListResponseSchema = z.object({
 
 export type TicketListItem = z.infer<typeof ticketListItemSchema>;
 export type TicketListResponse = z.infer<typeof ticketListResponseSchema>;
+
+/** Direction of a message relative to the support inbox. The Prisma column is a
+ *  plain `String`; this enum constrains the known values (written by the create
+ *  path). */
+export const messageDirectionEnum = z.enum(["inbound", "outbound"]);
+
+/** A single message in a ticket's conversation thread. `senderName` is the
+ *  staff agent for outbound replies (resolved from the `sender` relation) and
+ *  null for inbound messages, where the author is the external `fromEmail`.
+ *  Only `bodyText` is surfaced — `bodyHtml` is untrusted email HTML and is
+ *  omitted to avoid XSS. Timestamps are ISO strings. */
+export const ticketMessageSchema = z.object({
+  id: z.string(),
+  direction: messageDirectionEnum,
+  fromEmail: z.string(),
+  toEmail: z.string(),
+  senderName: z.string().nullable(),
+  bodyText: z.string(),
+  createdAt: z.string(),
+});
+
+export type TicketMessage = z.infer<typeof ticketMessageSchema>;
+
+/**
+ * Single-ticket detail wire shape. Same scalar fields as `ticketListItemSchema`,
+ * but the assignee relation is resolved server-side into human-readable
+ * name/email (the list shape only carries the internal `assigneeId`); both are
+ * null when unassigned. `messages` is the conversation thread, oldest-first.
+ * Timestamps are ISO strings, matching the list shape so the web client
+ * consumes them identically.
+ */
+export const ticketDetailSchema = z.object({
+  id: z.number().int(),
+  subject: z.string(),
+  status: ticketStatusEnum,
+  category: ticketCategoryEnum.nullable(),
+  priority: priorityEnum,
+  requesterEmail: z.string(),
+  requesterName: z.string(),
+  assigneeName: z.string().nullable(),
+  assigneeEmail: z.string().nullable(),
+  messages: z.array(ticketMessageSchema),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export type TicketDetail = z.infer<typeof ticketDetailSchema>;

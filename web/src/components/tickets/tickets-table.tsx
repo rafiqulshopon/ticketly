@@ -9,6 +9,7 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
+import { Link } from "react-router-dom";
 import type { TicketListItem, TicketListResponse } from "@ticketly/shared";
 import { ApiError } from "@/lib/api";
 import {
@@ -39,7 +40,7 @@ function toErrorMessage(err: unknown): string {
 }
 
 /** GENERAL_QUESTION → "General question". */
-function prettifyEnum(value: string): string {
+export function prettifyEnum(value: string): string {
   return value
     .toLowerCase()
     .replace(/_/g, " ")
@@ -51,7 +52,7 @@ type BadgeVariant = ComponentProps<typeof Badge>["variant"];
 // Lookup maps keyed by the enum value: a `Record` over the union forces every
 // status/priority to be listed, so adding a new variant is a type error until
 // it's mapped (stronger than a switch, which silently misses cases).
-const STATUS_BADGES: Record<TicketListItem["status"], { label: string; variant: BadgeVariant }> = {
+export const STATUS_BADGES: Record<TicketListItem["status"], { label: string; variant: BadgeVariant }> = {
   OPEN: { label: "Open", variant: "default" },
   AWAITING_STUDENT: { label: "Awaiting", variant: "secondary" },
   RESOLVED: { label: "Resolved", variant: "outline" },
@@ -63,7 +64,7 @@ function StatusBadge({ status }: { status: TicketListItem["status"] }) {
   return <Badge variant={variant}>{label}</Badge>;
 }
 
-const PRIORITY_BADGES: Record<TicketListItem["priority"], { label: string; variant: BadgeVariant }> = {
+export const PRIORITY_BADGES: Record<TicketListItem["priority"], { label: string; variant: BadgeVariant }> = {
   HIGH: { label: "High", variant: "destructive" },
   NORMAL: { label: "Normal", variant: "default" },
   LOW: { label: "Low", variant: "secondary" },
@@ -131,7 +132,14 @@ const columns: ColumnDef<TicketListItem>[] = [
   {
     accessorKey: "subject",
     header: ({ column }) => <SortHeader column={column}>Subject</SortHeader>,
-    cell: ({ row }) => <span className="font-medium text-foreground">{row.original.subject}</span>,
+    cell: ({ row }) => (
+      <Link
+        to={`/tickets/${row.original.id}`}
+        className="font-medium text-foreground underline-offset-4 hover:underline"
+      >
+        {row.original.subject}
+      </Link>
+    ),
   },
   {
     accessorKey: "requesterName",
