@@ -1,4 +1,4 @@
-import { Pencil } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import type { UserListItem, UserListResponse } from "@ticketly/shared";
 import { ApiError } from "@/lib/api";
 import {
@@ -41,12 +41,14 @@ export interface UsersTableProps {
   onRefetch: () => void;
   onPageChange: (page: number) => void;
   onEditUser: (user: UserListItem) => void;
+  onDeleteUser: (user: UserListItem) => void;
 }
 
 /**
  * Presentational user directory table: loading skeleton / error / empty / rows,
- * plus pagination and a per-row edit action. All data fetching and search/page
- * state live in the page (`routes/users.tsx`); this component just renders it.
+ * plus pagination and per-row edit/delete actions. All data fetching and
+ * search/page state live in the page (`routes/users.tsx`); this component just
+ * renders it.
  */
 export function UsersTable({
   data,
@@ -60,6 +62,7 @@ export function UsersTable({
   onRefetch,
   onPageChange,
   onEditUser,
+  onDeleteUser,
 }: UsersTableProps) {
   const total = data?.total ?? 0;
   const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -95,7 +98,9 @@ export function UsersTable({
               </TableCell>
             </TableRow>
           ) : data && data.items.length > 0 ? (
-            data.items.map((u) => <UserRow key={u.id} user={u} onEditUser={onEditUser} />)
+            data.items.map((u) => (
+              <UserRow key={u.id} user={u} onEditUser={onEditUser} onDeleteUser={onDeleteUser} />
+            ))
           ) : (
             <TableRow>
               <TableCell colSpan={6} className="h-24 text-center text-sm text-muted-foreground">
@@ -137,10 +142,15 @@ export function UsersTable({
 function UserRow({
   user,
   onEditUser,
+  onDeleteUser,
 }: {
   user: UserListItem;
   onEditUser: (user: UserListItem) => void;
+  onDeleteUser: (user: UserListItem) => void;
 }) {
+  // Admins can't be deleted (enforced server-side too); disable the button so
+  // the row's actions stay aligned and the intent is clear.
+  const isAdmin = user.role === "admin";
   return (
     <TableRow>
       <TableCell className="pl-4 font-medium text-foreground">{user.name}</TableCell>
@@ -159,14 +169,26 @@ function UserRow({
         {dateFmt.format(new Date(user.createdAt))}
       </TableCell>
       <TableCell className="pr-4 text-right">
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={`Edit ${user.name}`}
-          onClick={() => onEditUser(user)}
-        >
-          <Pencil className="size-4" />
-        </Button>
+        <div className="flex justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={`Edit ${user.name}`}
+            onClick={() => onEditUser(user)}
+          >
+            <Pencil className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={`Delete ${user.name}`}
+            title={isAdmin ? "Admins cannot be deleted" : `Delete ${user.name}`}
+            disabled={isAdmin}
+            onClick={() => onDeleteUser(user)}
+          >
+            <Trash2 className="size-4 text-destructive" />
+          </Button>
+        </div>
       </TableCell>
     </TableRow>
   );
@@ -193,7 +215,10 @@ function SkeletonRows() {
             <Skeleton className="ml-auto h-4 w-20" />
           </TableCell>
           <TableCell className="pr-4 text-right">
-            <Skeleton className="ml-auto h-8 w-8" />
+            <div className="ml-auto flex w-fit gap-1">
+              <Skeleton className="h-8 w-8" />
+              <Skeleton className="h-8 w-8" />
+            </div>
           </TableCell>
         </TableRow>
       ))}

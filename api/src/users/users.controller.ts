@@ -2,7 +2,9 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   Param,
   Patch,
   Post,
@@ -76,6 +78,14 @@ export class UsersController {
     // Forward the request headers (session cookie) — Better Auth's admin update/
     // set-password endpoints require the caller's session, unlike createUser.
     return this.users.update(id, input, req.headers);
+  }
+
+  @ApiOperation({ summary: "Soft-delete a user (admin only)" })
+  @HttpCode(204)
+  @Delete(":id")
+  delete(@Param("id") id: string, @Req() req: Request) {
+    // Forward headers — revokeUserSessions is admin-session-gated, like update().
+    return this.users.delete(id, req.headers);
   }
 }
 

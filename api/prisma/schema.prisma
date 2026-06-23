@@ -18,22 +18,23 @@ datasource db {
 model User {
   id            String    @id @unique
   email         String    @unique
-  emailVerified Boolean    @default(false)
+  emailVerified Boolean   @default(false)
   name          String
   image         String?
   // admin plugin
   role          Role      @default(agent)
-  banned        Boolean    @default(false)
+  banned        Boolean   @default(false)
   banReason     String?
   banExpires    DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
 
-  sessions         Session[]
-  accounts         Account[]
-  assignedTickets  Ticket[] @relation("AssignedTickets")
-  sentMessages     Message[]
-  drafts           Draft[]
+  sessions        Session[]
+  accounts        Account[]
+  assignedTickets Ticket[]  @relation("AssignedTickets")
+  sentMessages    Message[]
+  drafts          Draft[]
 }
 
 model Session {
@@ -72,7 +73,7 @@ model Verification {
   value      String
   expiresAt  DateTime
   createdAt  DateTime @default(now())
-  updatedAt  DateTime  @updatedAt
+  updatedAt  DateTime @updatedAt
 }
 
 // ------------------------------------------------------------------
@@ -162,15 +163,15 @@ model KbArticle {
 }
 
 model KbChunk {
-  id        String    @id @default(uuid())
+  id        String                       @id @default(uuid())
   articleId String
-  article   KbArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  article   KbArticle                    @relation(fields: [articleId], references: [id], onDelete: Cascade)
   content   String
   // pgvector embedding (1024-dim, Zhipu embedding-3). Prisma can't natively type
   // `vector`, so it's declared Unsupported; the column + the `vector` extension
   // are created via a raw SQL migration in Phase 4 (RAG). Search uses $queryRaw.
   embedding Unsupported("vector(1024)")?
-  createdAt DateTime  @default(now())
+  createdAt DateTime                     @default(now())
 
   @@index([articleId])
   @@map("kb_chunks")
@@ -181,7 +182,7 @@ model Draft {
   ticketId  String
   ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   bodyText  String
-  citations Json?    // DraftCitation[] (chunkId, articleId, articleTitle, snippet)
+  citations Json? // DraftCitation[] (chunkId, articleId, articleTitle, snippet)
   model     String?
   status    String   @default("pending") // pending | edited | sent | rejected
   agentId   String?

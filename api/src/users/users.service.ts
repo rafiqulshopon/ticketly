@@ -8,15 +8,16 @@ import {
 import type { CreateUserInput, EditUserInput, UserListItem, UserListResponse } from "@ticketly/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { auth } from "../auth/auth.config";
-import type { User } from "../generated/prisma/client";
+import { Role, type User } from "../generated/prisma/client";
 
 /**
- * Admin user directory. Reads query the Better Auth `User` table directly;
- * password/account rows are never selected. The one mutation exposed here —
- * creating a user — goes through Better Auth's admin plugin
- * (`auth.api.createUser`) so the password is hashed and the credential
- * `Account` row is created, keeping auth/session state consistent. Other
- * mutations (role change / ban) remain admin-plugin territory and aren't here.
+ * Admin user directory. Reads query the Better Auth `User` table directly
+ * (excluding soft-deleted rows); password/account rows are never selected.
+ * Mutations go through Better Auth's admin plugin so auth/session state stays
+ * consistent: `createUser` (hashes the password + creates the credential
+ * `Account`), `adminUpdateUser`/`setUserPassword` (edit), and
+ * `revokeUserSessions` + credential drop (soft delete). Role change / ban
+ * remain admin-plugin territory and aren't exposed here.
  */
 @Injectable()
 export class UsersService {
@@ -27,14 +28,18 @@ export class UsersService {
 
     // Case-insensitive substring match across email + name. Empty/whitespace
     // search returns everyone (the controller trims `q` before calling).
-    const where = q
-      ? {
-          OR: [
-            { email: { contains: q, mode: "insensitive" as const } },
-            { name: { contains: q, mode: "insensitive" as const } },
-          ],
-        }
-      : {};
+    // Soft-deleted users (deletedAt set) are always excluded.
+    const where = {
+      deletedAt: null,
+      ...(q
+        ? {
+            OR: [
+              { email: { contains: q, mode: "insensitive" as const } },
+              { name: { contains: q, mode: "insensitive" as const } },
+            ],
+          }
+        : {}),
+    };
 
     const [rows, total] = await Promise.all([
       this.prisma.user.findMany({
@@ -96,7 +101,7 @@ export class UsersService {
     headers: Record<string, string | string[] | undefined>,
   ): Promise<UserListItem> {
     const current = await this.prisma.user.findUnique({ where: { id } });
-    if (!current) {
+    if (!current || current.deletedAt) {
       throw new NotFoundException("User not found");
     }
 
@@ -135,6 +140,41 @@ export class UsersService {
       throw new Error("User vanished after update");
     }
     return this.toListItem(updated);
+  }
+
+  /**
+   * Soft-delete a user: the row is retained (history + FK references stay valid)
+   * but the user is locked out and hidden from the directory. Admins can't be
+   * deleted. The lock-out is applied before the `deletedAt` flag so a mid-way
+   * failure leaves the user locked-out-but-visible (retryable) rather than
+   * hidden-but-still-able-to-login:
+   *   1. revoke all sessions  -> logged out everywhere
+   *   2. drop credentials     -> password sign-in fails ("invalid credentials")
+   *   3. set deletedAt        -> hidden from the directory; row retained
+   *
+   * We deliberately do NOT call `auth.api.removeUser` — it hard-deletes the row.
+   * `revokeUserSessions` is admin-session-gated, so the controller forwards the
+   * request `headers` (the cookie), same as `update()`.
+   */
+  async delete(
+    id: string,
+    headers: Record<string, string | string[] | undefined>,
+  ): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user || user.deletedAt) {
+      throw new NotFoundException("User not found");
+    }
+    if (user.role === Role.admin) {
+      throw new BadRequestException("Admins cannot be deleted");
+    }
+
+    const requestHeaders = headers as Record<string, string>;
+
+    await this.callAuth(() =>
+      auth.api.revokeUserSessions({ body: { userId: id }, headers: requestHeaders }),
+    );
+    await this.prisma.account.deleteMany({ where: { userId: id } });
+    await this.prisma.user.update({ where: { id }, data: { deletedAt: new Date() } });
   }
 
   /**

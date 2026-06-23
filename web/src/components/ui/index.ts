@@ -1,5 +1,6 @@
 // Barrel for shadcn/ui primitives. Import from "@/components/ui" rather than the
 // individual files, e.g. `import { Button, Card } from "@/components/ui";`.
+export * from "./alert-dialog";
 export * from "./badge";
 export * from "./button";
 export * from "./card";

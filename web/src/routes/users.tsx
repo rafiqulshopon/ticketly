@@ -3,6 +3,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { UserListItem } from "@ticketly/shared";
 import { ApiError, getUsers } from "@/lib/api";
 import { Button, Input } from "@/components/ui";
+import { DeleteUserDialog } from "@/components/users/delete-user-dialog";
 import { UserFormDialog } from "@/components/users/user-form-dialog";
 import { UsersTable } from "@/components/users/users-table";
 
@@ -18,6 +19,7 @@ export function UsersPage() {
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserListItem | null>(null);
+  const [deletingUser, setDeletingUser] = useState<UserListItem | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -76,6 +78,7 @@ export function UsersPage() {
         onRefetch={() => void refetch()}
         onPageChange={setPage}
         onEditUser={setEditingUser}
+        onDeleteUser={setDeletingUser}
       />
 
       <UserFormDialog mode="create" open={createOpen} onOpenChange={setCreateOpen} />
@@ -86,6 +89,14 @@ export function UsersPage() {
         open={!!editingUser}
         onOpenChange={(o) => {
           if (!o) setEditingUser(null);
+        }}
+      />
+
+      <DeleteUserDialog
+        user={deletingUser}
+        open={!!deletingUser}
+        onOpenChange={(o) => {
+          if (!o) setDeletingUser(null);
         }}
       />
     </div>

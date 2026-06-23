@@ -107,3 +107,10 @@ export async function createUser(input: CreateUserInput): Promise<UserListItem> 
 export async function updateUser(id: string, input: EditUserInput): Promise<UserListItem> {
   return api<UserListItem>(`/users/${encodeURIComponent(id)}`, { method: "PATCH", data: input });
 }
+
+/** Admin-only soft delete. Revokes the user's sessions, drops their credentials,
+ *  and hides them from the directory (the row is retained). Throws
+ *  `ApiError(status)` (e.g. 400 admin can't be deleted, 404 not found). */
+export async function deleteUser(id: string): Promise<void> {
+  return api<void>(`/users/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
