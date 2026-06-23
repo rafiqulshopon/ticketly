@@ -1,11 +1,13 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type {
+  AssigneeOption,
   CreateTicketInput,
   ListTicketsQuery,
   Ticket,
   TicketDetail,
   TicketListItem,
   TicketListResponse,
+  UpdateTicketInput,
 } from "@ticketly/shared";
 import type { Ticket as TicketRow } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
@@ -161,6 +163,7 @@ export class TicketsService {
       priority: ticket.priority,
       requesterEmail: ticket.requesterEmail,
       requesterName: ticket.requesterName,
+      assigneeId: ticket.assigneeId,
       assigneeName: ticket.assignee ? ticket.assignee.name : null,
       assigneeEmail: ticket.assignee ? ticket.assignee.email : null,
       // `direction` is a plain String column; the create path only ever writes
@@ -177,6 +180,52 @@ export class TicketsService {
       createdAt: ticket.createdAt.toISOString(),
       updatedAt: ticket.updatedAt.toISOString(),
     };
+  }
+
+  /**
+   * Update a ticket. Today only `assigneeId` is supported: set it to a staff
+   * user id, or `null` to unassign. The assignee is validated (exists and not
+   * soft-deleted) before writing; there's no separate role check since only
+   * `admin`/`agent` users exist. Returns the fresh detail via `findOne`.
+   * Throws NotFoundException (404) for an unknown ticket, BadRequestException
+   * (400) for an invalid assignee. Unscoped (shared inbox), matching list().
+   */
+  async update(id: number, input: UpdateTicketInput): Promise<TicketDetail> {
+    const ticket = await this.prisma.ticket.findUnique({ where: { id }, select: { id: true } });
+    if (!ticket) throw new NotFoundException("Ticket not found");
+
+    if (input.assigneeId !== null) {
+      const assignee = await this.prisma.user.findUnique({
+        where: { id: input.assigneeId },
+        select: { deletedAt: true },
+      });
+      if (!assignee || assignee.deletedAt) {
+        throw new BadRequestException("Invalid assignee");
+      }
+    }
+
+    await this.prisma.ticket.update({ where: { id }, data: { assigneeId: input.assigneeId } });
+    return this.findOne(id);
+  }
+
+  /**
+   * Staff available for assignment (non-deleted users, name-sorted). Minimal
+   * projection — only id/name/role — so the staff-wide assignee endpoint doesn't
+   * expose the admin directory's email/account fields.
+   */
+  async listAssignees(): Promise<AssigneeOption[]> {
+    const users = await this.prisma.user.findMany({
+      where: { deletedAt: null },
+      select: { id: true, name: true, role: true },
+      orderBy: { name: "asc" },
+    });
+    return users.map((u) => ({
+      id: u.id,
+      name: u.name,
+      // Prisma `Role` is a string-literal union identical to the shared
+      // `userRoleEnum` (`AssigneeOption.role`), so no cast is needed.
+      role: u.role,
+    }));
   }
 
   /** Map a Prisma `Ticket` row to the wire shape (timestamps → ISO strings). */

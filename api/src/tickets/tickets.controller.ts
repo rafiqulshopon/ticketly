@@ -1,11 +1,13 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Query } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { Roles } from "@thallesp/nestjs-better-auth";
 import { ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
 import {
   createTicketSchema,
   listTicketsQuerySchema,
+  updateTicketSchema,
   type CreateTicketInput,
   type ListTicketsQuery,
+  type UpdateTicketInput,
 } from "@ticketly/shared";
 import { TicketsService } from "./tickets.service";
 
@@ -49,10 +51,28 @@ export class TicketsController {
     return this.tickets.list(query);
   }
 
+  @ApiOperation({ summary: "List staff available for assignment" })
+  @Get("assignees")
+  listAssignees() {
+    return this.tickets.listAssignees();
+  }
+
   @ApiOperation({ summary: "Get a single ticket (metadata only)" })
   @Get(":id")
   findOne(@Param("id") id: string) {
     return this.tickets.findOne(Number(id));
+  }
+
+  @ApiOperation({ summary: "Update a ticket (assignee)" })
+  @Patch(":id")
+  update(@Param("id") id: string, @Body() body: unknown) {
+    let input: UpdateTicketInput;
+    try {
+      input = updateTicketSchema.parse(body);
+    } catch {
+      throw new BadRequestException("Invalid ticket data");
+    }
+    return this.tickets.update(Number(id), input);
   }
 
   @ApiOperation({ summary: "Create a ticket from an inbound request (email-like)" })

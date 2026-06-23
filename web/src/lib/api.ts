@@ -1,9 +1,11 @@
 import axios, { type AxiosRequestConfig } from "axios";
 import type {
+  AssigneeOption,
   CreateUserInput,
   EditUserInput,
   TicketDetail,
   TicketListResponse,
+  UpdateTicketInput,
   UserListItem,
   UserListResponse,
 } from "@ticketly/shared";
@@ -140,6 +142,27 @@ export async function getTickets(
  *  navigating away. */
 export async function getTicket(id: number, config?: AxiosRequestConfig): Promise<TicketDetail> {
   return api<TicketDetail>(`/tickets/${encodeURIComponent(id)}`, config);
+}
+
+/** Staff available for assignment (admins + agents). Lightweight — id/name/role
+ *  only. Throws `ApiError(status)` on failure. */
+export async function getAssignees(config?: AxiosRequestConfig): Promise<AssigneeOption[]> {
+  return api<AssigneeOption[]>("/tickets/assignees", config);
+}
+
+/** Update a ticket. Today only `assigneeId` is supported (a staff id, or null to
+ *  unassign). Returns the updated ticket. Throws `ApiError(status)` (e.g. 400 for
+ *  an invalid assignee) on failure. */
+export async function updateTicket(
+  id: number,
+  input: UpdateTicketInput,
+  config?: AxiosRequestConfig,
+): Promise<TicketDetail> {
+  return api<TicketDetail>(`/tickets/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    data: input,
+    ...config,
+  });
 }
 
 /** Admin-only user provisioning. Throws `ApiError(status)` (e.g. 409 for a

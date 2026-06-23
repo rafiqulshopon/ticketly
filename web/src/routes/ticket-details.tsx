@@ -12,6 +12,7 @@ import {
   CardTitle,
   Skeleton,
 } from "@/components/ui";
+import { AssigneeSelect } from "@/components/tickets/assignee-select";
 import {
   PRIORITY_BADGES,
   STATUS_BADGES,
@@ -105,22 +106,7 @@ function TicketDetailCard({ ticket }: { ticket: TicketDetail }) {
             </span>
           }
         />
-        <Row
-          label="Assignee"
-          value={
-            ticket.assigneeName ? (
-              <span>
-                {ticket.assigneeName}
-                <span className="text-muted-foreground">
-                  {" "}
-                  · {ticket.assigneeEmail}
-                </span>
-              </span>
-            ) : (
-              <span className="text-muted-foreground">Unassigned</span>
-            )
-          }
-        />
+        <Row label="Assignee" value={<AssigneeSelect ticketId={ticket.id} assigneeId={ticket.assigneeId} />} />
         <Row
           label="Category"
           value={

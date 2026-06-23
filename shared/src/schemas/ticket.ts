@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { userRoleEnum } from "./user";
 
 /** Mirrors the Postgres enums in api/prisma/schema.prisma — keep in sync. */
 export const ticketStatusEnum = z.enum([
@@ -143,6 +144,7 @@ export const ticketDetailSchema = z.object({
   priority: priorityEnum,
   requesterEmail: z.string(),
   requesterName: z.string(),
+  assigneeId: z.string().nullable(),
   assigneeName: z.string().nullable(),
   assigneeEmail: z.string().nullable(),
   messages: z.array(ticketMessageSchema),
@@ -151,3 +153,27 @@ export const ticketDetailSchema = z.object({
 });
 
 export type TicketDetail = z.infer<typeof ticketDetailSchema>;
+
+/**
+ * Update payload for a ticket. Today only `assigneeId` is updatable (set to a
+ * staff user id, or `null` to unassign); the shape is generic so status/priority
+ * can be added later. Drives the PATCH /tickets/:id body parse.
+ */
+export const updateTicketSchema = z.object({
+  assigneeId: z.string().nullable(),
+});
+
+export type UpdateTicketInput = z.infer<typeof updateTicketSchema>;
+
+/**
+ * A staff member available for assignment (admin or agent). Lightweight by
+ * design — only what the assignee picker needs; no email/account fields, so the
+ * staff-wide `GET /tickets/assignees` endpoint doesn't leak the admin directory.
+ */
+export const assigneeOptionSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  role: userRoleEnum,
+});
+
+export type AssigneeOption = z.infer<typeof assigneeOptionSchema>;

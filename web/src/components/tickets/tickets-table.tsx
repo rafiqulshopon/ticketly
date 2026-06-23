@@ -9,7 +9,7 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link } from "@/components/link";
 import type { TicketListItem, TicketListResponse } from "@ticketly/shared";
 import { ApiError } from "@/lib/api";
 import {
@@ -133,10 +133,7 @@ const columns: ColumnDef<TicketListItem>[] = [
     accessorKey: "subject",
     header: ({ column }) => <SortHeader column={column}>Subject</SortHeader>,
     cell: ({ row }) => (
-      <Link
-        to={`/tickets/${row.original.id}`}
-        className="font-medium text-foreground underline-offset-4 hover:underline"
-      >
+      <Link to={`/tickets/${row.original.id}`} className="font-medium">
         {row.original.subject}
       </Link>
     ),
