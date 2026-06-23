@@ -1,38 +1,12 @@
 import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import type { UserListResponse } from "@ticketly/shared";
 import { ApiError, getUsers } from "@/lib/api";
-import {
-  Badge,
-  Button,
-  Card,
-  Input,
-  Skeleton,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui";
+import { Button, Input } from "@/components/ui";
 import { CreateUserDialog } from "@/components/users/create-user-dialog";
+import { UsersTable } from "@/components/users/users-table";
 
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 300;
-
-const dateFmt = new Intl.DateTimeFormat(undefined, {
-  year: "numeric",
-  month: "short",
-  day: "numeric",
-});
-
-function toErrorMessage(err: unknown): string {
-  if (err instanceof ApiError) {
-    if (err.status === 403) return "You don't have permission to view users.";
-    if (err.status === 401) return "Your session may have expired — please sign in again.";
-  }
-  return err instanceof Error ? err.message : "Failed to load users.";
-}
 
 export function UsersPage() {
   // `query` is the raw input value; `search` is the debounced value used as a
@@ -65,12 +39,6 @@ export function UsersPage() {
     retry: (failureCount, err) => !(err instanceof ApiError) && failureCount < 2,
   });
 
-  const total = data?.total ?? 0;
-  const start = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-  const end = Math.min(page * PAGE_SIZE, total);
-  const hasPrev = page > 1;
-  const hasNext = page * PAGE_SIZE < total;
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -94,118 +62,20 @@ export function UsersPage() {
         </div>
       </div>
 
-      <Card className="overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="pl-4">Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="pr-4 text-right">Joined</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isPending ? (
-              <SkeletonRows />
-            ) : isError ? (
-              <TableRow>
-                <TableCell colSpan={5} className="h-32 text-center">
-                  <div className="flex flex-col items-center gap-3 text-sm text-muted-foreground">
-                    <span>{toErrorMessage(error)}</span>
-                    <Button variant="outline" size="sm" onClick={() => void refetch()}>
-                      Try again
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : data && data.items.length > 0 ? (
-              data.items.map((u) => <UserRow key={u.id} user={u} />)
-            ) : (
-              <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center text-sm text-muted-foreground">
-                  {search ? `No users match “${search}”.` : "No users yet."}
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-
-        {/* Pagination */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-sm text-muted-foreground">
-          <span>
-            {isPending ? "Loading…" : total === 0 ? "No results" : `Showing ${start}–${end} of ${total}`}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!hasPrev || isFetching}
-              onClick={() => setPage(Math.max(1, page - 1))}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!hasNext || isFetching}
-              onClick={() => setPage(page + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      </Card>
+      <UsersTable
+        data={data}
+        isPending={isPending}
+        isFetching={isFetching}
+        isError={isError}
+        error={error}
+        search={search}
+        page={page}
+        pageSize={PAGE_SIZE}
+        onRefetch={() => void refetch()}
+        onPageChange={setPage}
+      />
 
       <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
-  );
-}
-
-function UserRow({ user }: { user: UserListResponse["items"][number] }) {
-  return (
-    <TableRow>
-      <TableCell className="pl-4 font-medium text-foreground">{user.name}</TableCell>
-      <TableCell className="text-muted-foreground">{user.email}</TableCell>
-      <TableCell>
-        {user.role === "admin" ? <Badge>Admin</Badge> : <Badge variant="outline">Agent</Badge>}
-      </TableCell>
-      <TableCell>
-        {user.banned ? (
-          <Badge variant="destructive">Banned</Badge>
-        ) : (
-          <span className="text-sm text-muted-foreground">Active</span>
-        )}
-      </TableCell>
-      <TableCell className="pr-4 text-right text-muted-foreground">
-        {dateFmt.format(new Date(user.createdAt))}
-      </TableCell>
-    </TableRow>
-  );
-}
-
-function SkeletonRows() {
-  return (
-    <>
-      {Array.from({ length: 6 }).map((_, i) => (
-        <TableRow key={i}>
-          <TableCell className="pl-4">
-            <Skeleton className="h-4 w-32" />
-          </TableCell>
-          <TableCell>
-            <Skeleton className="h-4 w-48" />
-          </TableCell>
-          <TableCell>
-            <Skeleton className="h-5 w-16 rounded-full" />
-          </TableCell>
-          <TableCell>
-            <Skeleton className="h-4 w-14" />
-          </TableCell>
-          <TableCell className="pr-4 text-right">
-            <Skeleton className="ml-auto h-4 w-20" />
-          </TableCell>
-        </TableRow>
-      ))}
-    </>
   );
 }
