@@ -18,9 +18,25 @@ export type UserRole = z.infer<typeof userRoleEnum>;
  * of the payload — new users default to `agent` server-side.
  */
 export const createUserSchema = z.object({
-  name: z.string().trim().min(3, "Name must be at least 3 characters"),
-  email: z.string().min(1, "Email is required").email("Enter a valid email"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  // Internal spaces are allowed in names ("Mary Jane"), but leading/trailing
+  // whitespace and whitespace-only values are rejected.
+  name: z
+    .string()
+    .min(3, "Name must be at least 3 characters")
+    .refine((value) => value === value.trim(), {
+      message: "Name cannot start or end with a space",
+    }),
+  email: z
+    .string()
+    .min(1, "Email is required")
+    .email("Enter a valid email")
+    .refine((value) => !/\s/.test(value), { message: "Email cannot contain spaces" }),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .refine((value) => !/\s/.test(value), {
+      message: "Password cannot contain spaces",
+    }),
 });
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;

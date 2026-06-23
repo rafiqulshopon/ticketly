@@ -75,6 +75,20 @@ describe("CreateUserDialog", () => {
     expect(createUser).not.toHaveBeenCalled();
   });
 
+  it("rejects whitespace in the password and outer whitespace in the name", async () => {
+    const user = userEvent.setup();
+    renderWithClient(<CreateUserDialog open onOpenChange={() => {}} />);
+
+    await user.type(screen.getByLabelText("Name"), "  Carol  ");
+    await user.type(screen.getByLabelText("Email"), "carol@example.com");
+    await user.type(screen.getByLabelText("Password"), "super secret");
+    await user.click(screen.getByRole("button", { name: "Create user" }));
+
+    expect(await screen.findByText("Name cannot start or end with a space")).toBeInTheDocument();
+    expect(screen.getByText("Password cannot contain spaces")).toBeInTheDocument();
+    expect(createUser).not.toHaveBeenCalled();
+  });
+
   it("creates the user, invalidates the list, and closes on success", async () => {
     const user = userEvent.setup();
     vi.mocked(createUser).mockResolvedValue(CREATED);
