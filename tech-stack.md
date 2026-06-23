@@ -11,7 +11,8 @@ Decoupled architecture: a **React SPA frontend** and a **NestJS backend API**, t
 - **shadcn/ui** — component library (React + Tailwind, framework-agnostic)
 - **react-email** — reply/email templates (renders to HTML/text the backend sends)
 - **Zod** — form/input validation (schemas shared with the backend)
-- **TanStack Query** — server-state / data-fetching (caching, dedup, background refetch, loading + error state for API data). Auth/session state comes from Better Auth's reactive `useSession()`; remaining UI state stays local in components.
+- **TanStack Query** — server-state / data-fetching (caching, dedup, background refetch, loading + error state). The standard way to fetch API data in `web/` — never use raw `fetch`.
+- **Axios** — HTTP transport behind the shared client in `lib/api.ts` (`withCredentials` carries the session cookie). Auth/session state comes from Better Auth's reactive `useSession()`; remaining UI state stays local in components.
 
 ## Backend (`api/`)
 

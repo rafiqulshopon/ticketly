@@ -47,7 +47,7 @@ Build ordering matters: **`shared` must build before `api` and `web`** (both imp
 ## Frontend (`web/`) conventions
 
 - `VITE_API_URL` = backend **origin only** (no `/api` suffix), e.g. `https://ticketly.up.railway.app`. Leave **blank in dev** — Vite proxies `/api` and `/health` to the backend (`vite.config.ts`), keeping cookies same-origin. This matches Better Auth's `baseURL` in `lib/auth.ts`.
-- The API client (`lib/api.ts`) prepends `/api` itself: call `api("/auth/...")`. The one exception is **health at the root** → `getHealth()` hits `${origin}/health`.
+- **Data fetching: TanStack Query + the axios client in `lib/api.ts` — never raw `fetch`** (the only exception is Better Auth's own client in `lib/auth.ts`). `api("/users")` prepends `/api`; HTTP errors throw `ApiError(status)`.
 - ESLint 10 flat config in `eslint.config.mjs`; React plugins are registered by hand (ESLint 10 rejects the legacy `plugins: [...]` array form the plugin presets still ship).
 - **Build all UI with [shadcn/ui](https://ui.shadcn.com)** — not hand-rolled primitives or other component libraries. Config is `web/components.json` (`new-york` style, `neutral` base color, CSS variables, lucide icons); generated components live in `web/src/components/ui/`. **Add new ones via the shadcn CLI run from `web/`** (`npx shadcn@latest add <name>`) — they're copied in and can then be edited freely.
 - **Styling uses Tailwind utilities + the design tokens** defined in `web/src/index.css` (`bg-background`, `text-muted-foreground`, `text-destructive`, `border`, etc.) — **never hardcode hex colors**. Compose existing shadcn primitives; don't reinvent them.
