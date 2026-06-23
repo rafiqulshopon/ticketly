@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { type OnChangeFn, type SortingState } from "@tanstack/react-table";
 import { ApiError, getTickets } from "@/lib/api";
-import { Input } from "@/components/ui";
+import { TicketFilters, type TicketFiltersValue } from "@/components/tickets/ticket-filters";
 import { TicketsTable } from "@/components/tickets/tickets-table";
 
 const PAGE_SIZE = 20;
@@ -18,6 +18,8 @@ export function TicketsPage() {
   // Server-side sort, newest first by default. The table owns the click UX; this
   // state drives the query key + the API request so the server does the ORDER BY.
   const [sorting, setSorting] = useState<SortingState>([{ id: "createdAt", desc: true }]);
+  // Server-side filters (status/category/priority); empty object = no filtering.
+  const [filters, setFilters] = useState<TicketFiltersValue>({});
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -40,7 +42,7 @@ export function TicketsPage() {
   // automatically; keepPreviousData keeps old rows visible while a new page,
   // search, or sort loads instead of flashing skeletons. The server sorts.
   const { data, isPending, isFetching, isError, error, refetch } = useQuery({
-    queryKey: ["tickets", search, page, sorting],
+    queryKey: ["tickets", search, page, sorting, filters],
     queryFn: ({ signal }) =>
       getTickets(
         {
@@ -49,6 +51,7 @@ export function TicketsPage() {
           pageSize: PAGE_SIZE,
           sortBy: sort?.id,
           sortDir: sort?.desc ? "desc" : "asc",
+          ...filters,
         },
         { signal },
       ),
@@ -58,21 +61,20 @@ export function TicketsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Tickets</h1>
-          <p className="text-sm text-muted-foreground">Support inbox, newest first.</p>
-        </div>
-        <div className="w-full sm:w-72">
-          <Input
-            type="search"
-            placeholder="Search subject or requester…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            aria-label="Search tickets"
-          />
-        </div>
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Tickets</h1>
+        <p className="text-sm text-muted-foreground">Support inbox, newest first.</p>
       </div>
+
+      <TicketFilters
+        searchValue={query}
+        onSearchChange={setQuery}
+        value={filters}
+        onChange={(next) => {
+          setFilters(next);
+          setPage(1);
+        }}
+      />
 
       <TicketsTable
         data={data}
