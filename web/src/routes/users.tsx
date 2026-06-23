@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui";
+import { CreateUserDialog } from "@/components/users/create-user-dialog";
 
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -40,6 +41,7 @@ export function UsersPage() {
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [createOpen, setCreateOpen] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -78,14 +80,17 @@ export function UsersPage() {
             Manage admin and agent accounts. Visible to administrators only.
           </p>
         </div>
-        <div className="w-full sm:w-72">
-          <Input
-            type="search"
-            placeholder="Search by name or email…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            aria-label="Search users"
-          />
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setCreateOpen(true)}>Create user</Button>
+          <div className="w-full sm:w-72">
+            <Input
+              type="search"
+              placeholder="Search by name or email…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              aria-label="Search users"
+            />
+          </div>
         </div>
       </div>
 
@@ -151,6 +156,8 @@ export function UsersPage() {
           </div>
         </div>
       </Card>
+
+      <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
 }

@@ -1,6 +1,7 @@
-import { Controller, Get, Query } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Post, Query } from "@nestjs/common";
 import { Roles } from "@thallesp/nestjs-better-auth";
 import { ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
+import { createUserSchema, type CreateUserInput } from "@ticketly/shared";
 import { z } from "zod";
 import { UsersService } from "./users.service";
 
@@ -33,6 +34,18 @@ export class UsersController {
   list(@Query() raw: Record<string, string | undefined>) {
     const { q, page, pageSize } = listUsersQuerySchema.parse(raw ?? {});
     return this.users.list({ q, page, pageSize });
+  }
+
+  @ApiOperation({ summary: "Create a user (admin only; defaults to role agent)" })
+  @Post()
+  create(@Body() body: unknown) {
+    let input: CreateUserInput;
+    try {
+      input = createUserSchema.parse(body);
+    } catch {
+      throw new BadRequestException("Invalid user data");
+    }
+    return this.users.create(input);
   }
 }
 

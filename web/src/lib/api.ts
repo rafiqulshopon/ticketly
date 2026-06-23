@@ -1,5 +1,5 @@
 import axios, { type AxiosRequestConfig } from "axios";
-import type { UserListResponse } from "@ticketly/shared";
+import type { CreateUserInput, UserListItem, UserListResponse } from "@ticketly/shared";
 
 /**
  * Backend origin (no /api suffix). Empty in dev → requests are same-origin and
@@ -88,4 +88,10 @@ export async function getUsers(
   if (params.pageSize != null) qs.set("pageSize", String(params.pageSize));
   const query = qs.toString();
   return api<UserListResponse>(`/users${query ? `?${query}` : ""}`, config);
+}
+
+/** Admin-only user provisioning. Throws `ApiError(status)` (e.g. 409 for a
+ *  duplicate email) on failure; the shared schema validates the payload. */
+export async function createUser(input: CreateUserInput): Promise<UserListItem> {
+  return api<UserListItem>("/users", { method: "POST", data: input });
 }
