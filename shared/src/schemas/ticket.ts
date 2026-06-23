@@ -164,6 +164,7 @@ export const updateTicketSchema = z.object({
   assigneeId: z.string().nullable().optional(),
   status: ticketStatusEnum.optional(),
   category: ticketCategoryEnum.nullable().optional(),
+  priority: priorityEnum.optional(),
 });
 
 export type UpdateTicketInput = z.infer<typeof updateTicketSchema>;

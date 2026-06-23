@@ -43,6 +43,7 @@ const MESSAGE_DIRECTION: Record<TicketMessage["direction"], { label: string; var
 // labels, and they match the table's badges exactly.
 const STATUS_OPTIONS = Object.entries(STATUS_BADGES).map(([value, { label }]) => ({ value, label }));
 const CATEGORY_OPTIONS = ticketCategoryEnum.options.map((value) => ({ value, label: prettifyEnum(value) }));
+const PRIORITY_OPTIONS = Object.entries(PRIORITY_BADGES).map(([value, { label }]) => ({ value, label }));
 
 export function TicketDetailsPage() {
   const { id: idParam } = useParams<{ id: string }>();
@@ -148,7 +149,6 @@ function MessageItem({ message }: { message: TicketMessage }) {
 }
 
 function PropertiesCard({ ticket }: { ticket: TicketDetail }) {
-  const priority = PRIORITY_BADGES[ticket.priority];
   return (
     <Card>
       <CardHeader>
@@ -164,8 +164,12 @@ function PropertiesCard({ ticket }: { ticket: TicketDetail }) {
           />
         </Cell>
         <Cell label="Priority">
-          {/* Read-only — status/category/assignee are the editable fields. */}
-          <Badge variant={priority.variant}>{priority.label}</Badge>
+          <PropertySelect
+            ticketId={ticket.id}
+            field="priority"
+            value={ticket.priority}
+            options={PRIORITY_OPTIONS}
+          />
         </Cell>
         <Cell label="Assignee">
           <AssigneeSelect ticketId={ticket.id} assigneeId={ticket.assigneeId} />

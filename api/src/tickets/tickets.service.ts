@@ -212,6 +212,7 @@ export class TicketsService {
       ...(input.assigneeId !== undefined ? { assigneeId: input.assigneeId } : {}),
       ...(input.status !== undefined ? { status: input.status } : {}),
       ...(input.category !== undefined ? { category: input.category } : {}),
+      ...(input.priority !== undefined ? { priority: input.priority } : {}),
     };
 
     await this.prisma.ticket.update({ where: { id }, data });

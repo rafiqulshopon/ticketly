@@ -26,7 +26,7 @@ function toErrorMessage(err: unknown): string {
 
 export interface PropertySelectProps {
   ticketId: number;
-  field: "status" | "category";
+  field: "status" | "category" | "priority";
   value: string | null;
   options: { value: string; label: string }[];
   /** When true, render a "none" option that clears the field to null (category). */
