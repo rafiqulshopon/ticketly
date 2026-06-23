@@ -107,13 +107,13 @@ enum Priority {
 }
 
 model Ticket {
-  id             String         @id @default(uuid())
+  id             Int            @id @default(autoincrement())
   subject        String
   status         TicketStatus   @default(OPEN)
-  category       TicketCategory @default(GENERAL_QUESTION)
+  category       TicketCategory?
   priority       Priority       @default(NORMAL)
   requesterEmail String
-  requesterName  String?
+  requesterName  String
   messageId      String?        @unique // RFC822 Message-ID of the originating inbound email
   assigneeId     String?
   assignee       User?          @relation("AssignedTickets", fields: [assigneeId], references: [id])
@@ -130,7 +130,7 @@ model Ticket {
 
 model Message {
   id          String   @id @default(uuid())
-  ticketId    String
+  ticketId    Int
   ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   direction   String // "inbound" | "outbound"
   fromEmail   String
@@ -179,7 +179,7 @@ model KbChunk {
 
 model Draft {
   id        String   @id @default(uuid())
-  ticketId  String
+  ticketId  Int
   ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   bodyText  String
   citations Json? // DraftCitation[] (chunkId, articleId, articleTitle, snippet)
