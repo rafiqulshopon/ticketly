@@ -82,6 +82,43 @@ export class AiService {
     return isFirstReply ? `${this.greeting(ticket)}${body}${this.signature(agentName)}` : body;
   }
 
+  /**
+   * Summarize a ticket and its conversation for a support agent — a concise digest
+   * of what the customer needs, what's happened so far, the current state, and any
+   * open questions / next steps. Returns plain text and persists nothing. Unlike
+   * `polishReply` (which only feeds the last few messages to bound the prompt), a
+   * summary is only useful with the full thread, so the entire conversation is
+   * included; a very long thread is bounded only by the model's context window.
+   */
+  async summarizeTicket(ticket: TicketDetail): Promise<string> {
+    const system = [
+      "You summarize customer support conversations for a support agent who needs a quick digest.",
+      "Capture the customer's issue, what has happened in the conversation, the current state, and any open questions or next steps.",
+      "Base the summary ONLY on information present in the conversation — do not invent facts, dates, names, amounts, or commitments.",
+      "Include specific details the customer shared when they matter (order numbers, error messages, dates, amounts).",
+      "Be concise and scannable: a one-line overview, then a few short bullet points.",
+      "Reply in the same language the conversation is written in.",
+      "Output ONLY the summary — no preamble, no headings, no quotation marks.",
+    ].join(" ");
+
+    const { text } = await generateText({
+      model: this.provider(this.model),
+      system,
+      prompt: [
+        `Ticket subject: ${ticket.subject}`,
+        `Customer: ${ticket.requesterName} (${ticket.requesterEmail})`,
+        `Status: ${ticket.status}`,
+        ...(ticket.category ? [`Category: ${ticket.category}`] : []),
+        `Priority: ${ticket.priority}`,
+        "",
+        "Full conversation (oldest first):",
+        this.buildFullTranscript(ticket),
+      ].join("\n"),
+    });
+
+    return text.trim();
+  }
+
   /** Greeting prepended to the first agent reply only. Deterministic (the model is
    *  told not to add one) so it never duplicates. Uses the ticket's requester. */
   private greeting(ticket: TicketDetail): string {
@@ -102,6 +139,16 @@ export class AiService {
     const recent = ticket.messages.slice(-MAX_CONTEXT_MESSAGES);
     if (recent.length === 0) return "(no prior messages)";
     return recent
+      .map((m) => `${m.senderType === "customer" ? "Customer" : "Agent"}: ${m.bodyText}`)
+      .join("\n\n");
+  }
+
+  /** Role-labelled transcript of the ENTIRE conversation, oldest first. Used for
+   *  summarization, which needs full context — unlike `buildTranscript`'s bounded
+   *  slice (a summary that drops the start of a thread misses the original issue). */
+  private buildFullTranscript(ticket: TicketDetail): string {
+    if (ticket.messages.length === 0) return "(no messages)";
+    return ticket.messages
       .map((m) => `${m.senderType === "customer" ? "Customer" : "Agent"}: ${m.bodyText}`)
       .join("\n\n");
   }

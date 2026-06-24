@@ -118,6 +118,14 @@ export class TicketsController {
     return this.tickets.polish(Number(id), input, session.user.name);
   }
 
+  @ApiOperation({ summary: "Summarize a ticket and its conversation with AI" })
+  @Post(":id/summarize")
+  summarize(@Param("id") id: string) {
+    // No request body — the endpoint is keyed by the ticket id alone and reads
+    // the thread server-side. The summary is regenerated on every call.
+    return this.tickets.summarize(Number(id));
+  }
+
   @ApiOperation({ summary: "Create a ticket from an inbound request (email-like)" })
   @Post()
   async create(@Body() body: unknown) {

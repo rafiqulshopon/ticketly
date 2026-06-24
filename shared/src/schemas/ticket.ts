@@ -100,6 +100,19 @@ export const polishReplyResultSchema = z.object({
 
 export type PolishReplyResult = z.infer<typeof polishReplyResultSchema>;
 
+/**
+ * Output of the summarize endpoint — a plain-text digest of the ticket and its
+ * conversation. There is no request schema: the endpoint is keyed by the ticket
+ * id alone (`POST /tickets/:id/summarize`) and reads the thread server-side. The
+ * summary is generated fresh on every call and never persisted, so a client
+ * regenerates it simply by calling again.
+ */
+export const summarizeTicketResultSchema = z.object({
+  summary: z.string(),
+});
+
+export type SummarizeTicketResult = z.infer<typeof summarizeTicketResultSchema>;
+
 /** Inbound payload shape for listing/filtering tickets (Phase 2). */
 export const listTicketsQuerySchema = z.object({
   q: z

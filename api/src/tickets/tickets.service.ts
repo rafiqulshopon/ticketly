@@ -6,6 +6,7 @@ import type {
   ListTicketsQuery,
   PolishReplyInput,
   PolishReplyResult,
+  SummarizeTicketResult,
   Ticket,
   TicketDetail,
   TicketListItem,
@@ -263,6 +264,27 @@ export class TicketsService {
     }
     if (!bodyText) throw new BadGatewayException("Polish service returned no content");
     return { bodyText };
+  }
+
+  /**
+   * AI-summarize a ticket and its conversation. Read-only — persists nothing; it
+   * returns a plain-text digest for the agent. The summary is generated fresh on
+   * every call (no caching), so the client "regenerates" simply by calling again.
+   * Reuses `findOne` for both the 404 check and the conversation context. A
+   * model/provider failure surfaces as a 502 Bad Gateway so the client can tell an
+   * AI outage apart from an app error. Throws NotFoundException (404) for an
+   * unknown ticket.
+   */
+  async summarize(id: number): Promise<SummarizeTicketResult> {
+    const ticket = await this.findOne(id);
+    let summary: string;
+    try {
+      summary = await this.ai.summarizeTicket(ticket);
+    } catch {
+      throw new BadGatewayException("Summarize service is unavailable");
+    }
+    if (!summary) throw new BadGatewayException("Summarize service returned no content");
+    return { summary };
   }
 
   /**

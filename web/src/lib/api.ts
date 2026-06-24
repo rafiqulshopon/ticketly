@@ -6,6 +6,7 @@ import type {
   EditUserInput,
   PolishReplyInput,
   PolishReplyResult,
+  SummarizeTicketResult,
   TicketDetail,
   TicketListResponse,
   UpdateTicketInput,
@@ -197,6 +198,21 @@ export async function polishReply(
   return api<PolishReplyResult>(`/tickets/${encodeURIComponent(id)}/polish`, {
     method: "POST",
     data: input,
+    ...config,
+  });
+}
+
+/** AI-summarize a ticket and its conversation. No request body — the backend
+ *  reads the thread server-side, keyed by the ticket id. Returns a plain-text
+ *  digest generated fresh on every call (never persisted). Throws
+ *  `ApiError(status)` (404 unknown ticket, 502 on an AI/provider outage) on
+ *  failure. */
+export async function summarizeTicket(
+  id: number,
+  config?: AxiosRequestConfig,
+): Promise<SummarizeTicketResult> {
+  return api<SummarizeTicketResult>(`/tickets/${encodeURIComponent(id)}/summarize`, {
+    method: "POST",
     ...config,
   });
 }
