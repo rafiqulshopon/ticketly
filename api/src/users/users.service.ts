@@ -150,7 +150,14 @@ export class UsersService {
    * hidden-but-still-able-to-login:
    *   1. revoke all sessions  -> logged out everywhere
    *   2. drop credentials     -> password sign-in fails ("invalid credentials")
-   *   3. set deletedAt        -> hidden from the directory; row retained
+   *   3. unassign tickets     -> released back to the shared inbox
+   *   4. set deletedAt        -> hidden from the directory; row retained
+   *
+   * Ticket unassignment is a single `updateMany` (atomic) and runs before the
+   * `deletedAt` flag: once that flag is set this method early-returns `NotFound`,
+   * so a step after it would not be retryable. Every step is idempotent
+   * (re-running on retry is a no-op), and a deleted user can't be re-assigned
+   * (`update()`/`listAssignees()` reject `deletedAt` users).
    *
    * We deliberately do NOT call `auth.api.removeUser` — it hard-deletes the row.
    * `revokeUserSessions` is admin-session-gated, so the controller forwards the
@@ -174,6 +181,7 @@ export class UsersService {
       auth.api.revokeUserSessions({ body: { userId: id }, headers: requestHeaders }),
     );
     await this.prisma.account.deleteMany({ where: { userId: id } });
+    await this.prisma.ticket.updateMany({ where: { assigneeId: id }, data: { assigneeId: null } });
     await this.prisma.user.update({ where: { id }, data: { deletedAt: new Date() } });
   }
 
