@@ -51,7 +51,7 @@ export const createTicketSchema = z.object({
   requesterName: z.string().trim().min(1, "Name is required"),
   subject: z.string().trim().min(1, "Subject is required"),
   bodyText: z.string().min(1, "Body is required"),
-  bodyHtml: z.string().optional(),
+  bodyHtml: z.string().optional(), // untrusted email HTML — sanitized (DOMPurify) at the storage chokepoint in TicketsService.create before persistence
   category: ticketCategoryEnum.optional(),
 });
 

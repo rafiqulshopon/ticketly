@@ -11,6 +11,7 @@ import type {
   UpdateTicketInput,
 } from "@ticketly/shared";
 import type { Ticket as TicketRow } from "../generated/prisma/client";
+import { sanitizeEmailHtml } from "../common/sanitize-html";
 import { PrismaService } from "../prisma/prisma.service";
 
 /**
@@ -71,7 +72,9 @@ export class TicketsService {
             toEmail: SUPPORT_INBOUND_ADDRESS,
             subject: input.subject,
             bodyText: input.bodyText,
-            bodyHtml: input.bodyHtml ?? null,
+            // bodyHtml is sanitized here — the only write path for it — so the
+            // DB never stores untrusted email HTML verbatim.
+            bodyHtml: sanitizeEmailHtml(input.bodyHtml),
             messageId,
             // inReplyTo stays null until reply threading is implemented.
           },

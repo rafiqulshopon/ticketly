@@ -26,6 +26,7 @@
     "@ticketly/shared": "*",
     "better-auth": "^1.6.20",
     "dotenv": "^16.4.5",
+    "isomorphic-dompurify": "^3.18.0",
     "pg": "^8.22.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
