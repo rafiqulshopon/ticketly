@@ -1,8 +1,9 @@
 import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createReplySchema, type CreateReplyInput, type TicketDetail } from "@ticketly/shared";
-import { ApiError, replyToTicket } from "@/lib/api";
+import { Wand2 } from "lucide-react";
+import { createReplySchema, type CreateReplyInput, type PolishReplyInput, type TicketDetail } from "@ticketly/shared";
+import { ApiError, polishReply, replyToTicket } from "@/lib/api";
 import { Button, Card, CardContent, CardHeader, CardTitle, Textarea } from "@/components/ui";
 
 // The form's only field is the reply body, so its values are exactly the shared
@@ -19,6 +20,16 @@ function toErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : "Couldn't send the reply.";
 }
 
+/** Map a failed polish mutation to a user-facing message. */
+function toPolishErrorMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 502 || err.status === 504) return "The polish service is unavailable. Try again.";
+    if (err.status === 404) return "Ticket not found.";
+    if (err.status === 400) return "Reply couldn't be polished. Please check your input.";
+  }
+  return err instanceof Error ? err.message : "Couldn't polish the reply.";
+}
+
 /**
  * Reply composer for a ticket. Submits a plain-text body that the backend stores
  * as an outbound (agent) message in the conversation thread. On success the
@@ -32,17 +43,27 @@ export function ReplyForm({ ticket }: { ticket: TicketDetail }) {
   const mutation = useMutation({
     mutationFn: (values: FormValues) => replyToTicket(ticket.id, values),
   });
+  const polish = useMutation({
+    mutationFn: (values: PolishReplyInput) => polishReply(ticket.id, values),
+  });
 
   const {
     register,
     handleSubmit,
     reset,
     setError,
+    setValue,
+    getValues,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(createReplySchema) as Resolver<FormValues>,
     defaultValues: { bodyText: "" },
   });
+
+  // Live draft value — drives the Polish button's disabled state so it can't fire
+  // on an empty textarea. `watch` re-renders per keystroke, fine for one field.
+  const bodyText = watch("bodyText");
 
   async function onSubmit(values: FormValues) {
     try {
@@ -52,6 +73,23 @@ export function ReplyForm({ ticket }: { ticket: TicketDetail }) {
       reset({ bodyText: "" });
     } catch (err) {
       setError("root", { message: toErrorMessage(err) });
+    }
+  }
+
+  /**
+   * Polish the current draft with the AI service and write the improved text back
+   * into the field for review before sending. Non-streaming: the textarea updates
+   * in one shot. Re-validates so the Send button stays in sync with the new text.
+   * The button is disabled while sending/polishing or when the draft is empty.
+   */
+  async function onPolish() {
+    const draft = getValues("bodyText").trim();
+    if (!draft) return;
+    try {
+      const { bodyText: polished } = await polish.mutateAsync({ bodyText: draft });
+      setValue("bodyText", polished, { shouldValidate: true });
+    } catch (err) {
+      setError("root", { message: toPolishErrorMessage(err) });
     }
   }
 
@@ -73,8 +111,18 @@ export function ReplyForm({ ticket }: { ticket: TicketDetail }) {
           />
           {errors.bodyText && <p className="text-sm text-destructive">{errors.bodyText.message}</p>}
           {errors.root && <p className="text-sm text-destructive">{errors.root.message}</p>}
-          <div className="flex justify-end">
-            <Button type="submit" disabled={isSubmitting}>
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onPolish}
+              disabled={isSubmitting || polish.isPending || !bodyText.trim()}
+            >
+              <Wand2 className="size-4" />
+              {polish.isPending ? "Polishing…" : "Polish"}
+            </Button>
+            <Button type="submit" disabled={isSubmitting || polish.isPending}>
               {isSubmitting ? "Sending…" : "Send reply"}
             </Button>
           </div>

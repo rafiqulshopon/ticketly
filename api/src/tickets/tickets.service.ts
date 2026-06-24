@@ -1,9 +1,11 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadGatewayException, BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type {
   AssigneeOption,
   CreateReplyInput,
   CreateTicketInput,
   ListTicketsQuery,
+  PolishReplyInput,
+  PolishReplyResult,
   Ticket,
   TicketDetail,
   TicketListItem,
@@ -11,6 +13,7 @@ import type {
   UpdateTicketInput,
 } from "@ticketly/shared";
 import type { Ticket as TicketRow } from "../generated/prisma/client";
+import { AiService } from "../ai/ai.service";
 import { sanitizeEmailHtml } from "../common/sanitize-html";
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -35,7 +38,10 @@ const SUPPORT_INBOUND_ADDRESS = "support@ticketly.local";
  */
 @Injectable()
 export class TicketsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ai: AiService,
+  ) {}
 
   async create(
     input: CreateTicketInput,
@@ -235,6 +241,28 @@ export class TicketsService {
     });
 
     return this.findOne(ticketId);
+  }
+
+  /**
+   * AI-polish a drafted reply, using the ticket's conversation as context.
+   * Read-only — persists nothing and sends no mail; it returns the improved body
+   * for the agent to review and edit before sending. The returned body is signed
+   * with the agent's name and the product name (Ticketly). Reuses `findOne` for
+   * both the 404 check and the conversation context (subject + messages). A
+   * model/provider failure surfaces as a 502 Bad Gateway so the client can tell an
+   * AI outage apart from an app error. Throws NotFoundException (404) for an
+   * unknown ticket.
+   */
+  async polish(id: number, input: PolishReplyInput, agentName: string): Promise<PolishReplyResult> {
+    const ticket = await this.findOne(id);
+    let bodyText: string;
+    try {
+      bodyText = await this.ai.polishReply(input.bodyText, ticket, agentName);
+    } catch {
+      throw new BadGatewayException("Polish service is unavailable");
+    }
+    if (!bodyText) throw new BadGatewayException("Polish service returned no content");
+    return { bodyText };
   }
 
   /**

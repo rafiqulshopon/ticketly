@@ -6,10 +6,12 @@ import {
   createReplySchema,
   createTicketSchema,
   listTicketsQuerySchema,
+  polishReplySchema,
   updateTicketSchema,
   type CreateReplyInput,
   type CreateTicketInput,
   type ListTicketsQuery,
+  type PolishReplyInput,
   type UpdateTicketInput,
 } from "@ticketly/shared";
 import { auth } from "../auth/auth.config";
@@ -96,6 +98,24 @@ export class TicketsController {
       throw new BadRequestException("Invalid reply data");
     }
     return this.tickets.reply(Number(id), input, session.user.id);
+  }
+
+  @ApiOperation({ summary: "Polish a drafted reply with AI" })
+  @Post(":id/polish")
+  async polish(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    // The signed-in agent's name signs the polished reply, so it's threaded to
+    // the AI service alongside the draft (same @Session pattern as reply()).
+    @Session() session: UserSession<typeof auth>,
+  ) {
+    let input: PolishReplyInput;
+    try {
+      input = polishReplySchema.parse(body);
+    } catch {
+      throw new BadRequestException("Invalid polish request");
+    }
+    return this.tickets.polish(Number(id), input, session.user.name);
   }
 
   @ApiOperation({ summary: "Create a ticket from an inbound request (email-like)" })

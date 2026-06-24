@@ -80,6 +80,26 @@ export const createReplySchema = z.object({
 
 export type CreateReplyInput = z.infer<typeof createReplySchema>;
 
+/**
+ * Input for AI-polishing a drafted reply. Drives POST /tickets/:id/polish. Like
+ * `createReplySchema` it carries only the plain-text body — the conversation
+ * context is read server-side (the agent is polishing a reply to the ticket they
+ * already have open). Length-capped higher than a reply to bound the prompt size
+ * without rejecting a long draft.
+ */
+export const polishReplySchema = z.object({
+  bodyText: z.string().trim().min(1, "Reply cannot be empty").max(20_000, "Reply is too long"),
+});
+
+export type PolishReplyInput = z.infer<typeof polishReplySchema>;
+
+/** Output of the polish endpoint — the improved reply body, plain text. */
+export const polishReplyResultSchema = z.object({
+  bodyText: z.string(),
+});
+
+export type PolishReplyResult = z.infer<typeof polishReplyResultSchema>;
+
 /** Inbound payload shape for listing/filtering tickets (Phase 2). */
 export const listTicketsQuerySchema = z.object({
   q: z

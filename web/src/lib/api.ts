@@ -4,6 +4,8 @@ import type {
   CreateReplyInput,
   CreateUserInput,
   EditUserInput,
+  PolishReplyInput,
+  PolishReplyResult,
   TicketDetail,
   TicketListResponse,
   UpdateTicketInput,
@@ -176,6 +178,23 @@ export async function replyToTicket(
   config?: AxiosRequestConfig,
 ): Promise<TicketDetail> {
   return api<TicketDetail>(`/tickets/${encodeURIComponent(id)}/replies`, {
+    method: "POST",
+    data: input,
+    ...config,
+  });
+}
+
+/** AI-polish a drafted reply against the ticket's conversation context. The
+ *  backend reads the thread server-side, so only the draft body is sent. Returns
+ *  the improved body (plain text) for the agent to review before sending — it
+ *  does not post the reply. Throws `ApiError(status)` (400 empty/too-long draft,
+ *  404 unknown ticket, 502 on an AI/provider outage) on failure. */
+export async function polishReply(
+  id: number,
+  input: PolishReplyInput,
+  config?: AxiosRequestConfig,
+): Promise<PolishReplyResult> {
+  return api<PolishReplyResult>(`/tickets/${encodeURIComponent(id)}/polish`, {
     method: "POST",
     data: input,
     ...config,
