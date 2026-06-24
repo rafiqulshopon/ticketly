@@ -41,17 +41,27 @@ export type Ticket = z.infer<typeof ticketSchema>;
  * so the column has no default). `requesterName` is required.
  * The SendGrid Inbound Parse webhook (Phase 3) will populate the same fields
  * after parsing the raw MIME; messageId/inReplyTo are filled in there, not here.
+ *
+ * Every string field is length-capped: this schema drives the untrusted inbound
+ * webhook (`inboundEmailSchema` extends it, so the caps propagate), and an
+ * unbounded `bodyHtml` would both bloat storage and drive a multi-second
+ * DOMPurify parse (jsdom is O(n)). Caps accept any realistic email while
+ * blocking MB-scale payloads.
  */
 export const createTicketSchema = z.object({
   requesterEmail: z
     .string()
     .min(1, "Email is required")
+    .max(254, "Email is too long")
     .email("Enter a valid email")
     .refine((value) => !/\s/.test(value), { message: "Email cannot contain spaces" }),
-  requesterName: z.string().trim().min(1, "Name is required"),
-  subject: z.string().trim().min(1, "Subject is required"),
-  bodyText: z.string().min(1, "Body is required"),
-  bodyHtml: z.string().optional(), // untrusted email HTML — sanitized (DOMPurify) at the storage chokepoint in TicketsService.create before persistence
+  requesterName: z.string().trim().min(1, "Name is required").max(255, "Name is too long"),
+  subject: z.string().trim().min(1, "Subject is required").max(500, "Subject is too long"),
+  bodyText: z.string().min(1, "Body is required").max(100_000, "Body is too long"),
+  // Untrusted email HTML — sanitized (DOMPurify) at the storage chokepoint in
+  // TicketsService.create before persistence. Capped higher than `bodyText`
+  // because HTML carries markup overhead and still runs through jsdom.
+  bodyHtml: z.string().max(500_000, "HTML body is too long").optional(),
   category: ticketCategoryEnum.optional(),
 });
 

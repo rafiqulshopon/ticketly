@@ -16,7 +16,7 @@ import { TicketsService } from "../../tickets/tickets.service";
  * decision. If that env var is unset the webhook fails closed (403 for everyone).
  */
 export const inboundEmailSchema = createTicketSchema.extend({
-  messageId: z.string().min(1).optional(),
+  messageId: z.string().min(1).max(512, "Message ID is too long").optional(),
 });
 export type InboundEmailInput = z.infer<typeof inboundEmailSchema>;
 
