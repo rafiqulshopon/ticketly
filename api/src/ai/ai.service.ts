@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { generateText } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import type { TicketDetail } from "@ticketly/shared";
+import { ticketCategoryEnum, type TicketCategory, type TicketDetail } from "@ticketly/shared";
 
 /** Maximum number of prior messages fed to the model as context. Keeps the
  *  prompt (and token cost) bounded for long threads. */
@@ -9,8 +9,8 @@ const MAX_CONTEXT_MESSAGES = 6;
 
 /**
  * Server-side AI calls through the Vercel AI SDK, against any OpenAI-compatible
- * chat endpoint. This is the first AI surface in the app; the planned classify /
- * summarize / RAG steps will grow here.
+ * chat endpoint. classify + summarize are implemented here; the planned
+ * RAG-grounded draft step will grow here too.
  *
  * Everything about the model is env-driven and provider-neutral (`AI_API_KEY`,
  * `AI_BASE_URL`, `AI_MODEL`) so the provider/model can be swapped — to OpenAI,
@@ -33,6 +33,39 @@ export class AiService {
     apiKey: process.env.AI_API_KEY ?? "",
   });
   private readonly model = process.env.AI_MODEL ?? "glm-4.7-flash";
+
+  /**
+   * Classify a ticket into one of the four categories from its subject + first
+   * message body. Returns the category, or null when the model's reply isn't a
+   * valid category — the caller then leaves the ticket uncategorized (null)
+   * rather than guessing. Built for high volume: a Flash-tier model and a capped
+   * body keep each call cheap. Provider/network errors throw and are handled by
+   * the caller (the non-blocking trigger in TicketsService).
+   */
+  async classifyTicket(subject: string, body: string): Promise<TicketCategory | null> {
+    const system = [
+      "You classify customer support tickets into exactly ONE category.",
+      "GENERAL_QUESTION — general inquiries or account/help questions that are not technical and not about money.",
+      "TECHNICAL_QUESTION — bugs, errors, login/access problems, or how-to/technical issues with the product.",
+      "REFUND_REQUEST — refunds, billing disputes, duplicate charges, cancellations, or credits.",
+      "SPAM — spam, promotional junk, phishing, or anything unrelated to a real support need.",
+      "Decide from the subject and the message body. If two seem to fit, pick the more specific one; if none truly fits, prefer GENERAL_QUESTION.",
+      "Reply with ONLY the category name — one of: GENERAL_QUESTION, TECHNICAL_QUESTION, REFUND_REQUEST, SPAM. No punctuation, no explanation.",
+    ].join(" ");
+
+    const { text } = await generateText({
+      model: this.provider(this.model),
+      system,
+      // The subject + the start of the body is enough to categorize; cap the body
+      // to keep the prompt (and per-ticket cost) small at volume.
+      prompt: `Subject: ${subject}\n\nMessage:\n${body.slice(0, 2000)}`,
+    });
+
+    const cleaned = text.trim().replace(/^["'\s.]+|["'\s.]+$/g, "").toUpperCase();
+    return (ticketCategoryEnum.options as readonly string[]).includes(cleaned)
+      ? (cleaned as TicketCategory)
+      : null;
+  }
 
   /**
    * Improve a drafted agent reply, informed by the ticket's conversation.

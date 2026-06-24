@@ -16,6 +16,11 @@ export const ticketCategoryEnum = z.enum([
   "SPAM",
 ]);
 
+/** The four ticket categories. Mirrors the Postgres `TicketCategory` enum — keep
+ *  in sync. `category` is nullable on a ticket: null until the AI classify step
+ *  assigns it (after creation, in the background). */
+export type TicketCategory = z.infer<typeof ticketCategoryEnum>;
+
 export const priorityEnum = z.enum(["LOW", "NORMAL", "HIGH"]);
 
 export const ticketSchema = z.object({
