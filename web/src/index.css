@@ -24,6 +24,8 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
+  --chat-agent: oklch(0.546 0.215 262.881);
+  --chat-agent-foreground: oklch(0.985 0 0);
   --radius: 0.625rem;
 }
 
@@ -47,6 +49,8 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
+  --chat-agent: oklch(0.623 0.214 259.815);
+  --chat-agent-foreground: oklch(0.985 0 0);
 }
 
 @theme inline {
@@ -69,6 +73,8 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-chat-agent: var(--chat-agent);
+  --color-chat-agent-foreground: var(--chat-agent-foreground);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
