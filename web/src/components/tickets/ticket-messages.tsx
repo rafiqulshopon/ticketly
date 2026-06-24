@@ -12,7 +12,10 @@ type BadgeVariant = ComponentProps<typeof Badge>["variant"];
 // senderType → label + badge variant (object map, not a switch — adding a value
 // is a type error until it's mapped here). The explicit `senderType` is the
 // source of truth for the Agent/Customer distinction in the thread.
-const MESSAGE_SENDER_TYPE: Record<TicketMessage["senderType"], { label: string; variant: BadgeVariant }> = {
+const MESSAGE_SENDER_TYPE: Record<
+  TicketMessage["senderType"],
+  { label: string; variant: BadgeVariant }
+> = {
   customer: { label: "Customer", variant: "secondary" },
   agent: { label: "Agent", variant: "default" },
 };
@@ -28,7 +31,7 @@ export function TicketMessages({ messages }: { messages: TicketMessage[] }) {
         {messages.length === 0 ? (
           <p className="text-sm text-muted-foreground">No messages yet.</p>
         ) : (
-          <div className="flex flex-col gap-4">
+          <div className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto pr-1">
             {messages.map((message) => (
               <MessageItem key={message.id} message={message} />
             ))}
@@ -44,7 +47,7 @@ function MessageItem({ message }: { message: TicketMessage }) {
   const isAgent = message.senderType === "agent";
   // Customer: the external author (fromEmail). Agent: the staff agent (senderName),
   // replying to the requester (toEmail).
-  const author = isAgent ? message.senderName ?? "Support team" : message.fromEmail;
+  const author = isAgent ? (message.senderName ?? "Support team") : message.fromEmail;
   return (
     <div className={`flex flex-col gap-1 ${isAgent ? "items-end" : "items-start"}`}>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -59,7 +62,9 @@ function MessageItem({ message }: { message: TicketMessage }) {
       >
         {message.bodyText}
       </p>
-      <span className="text-xs text-muted-foreground">{dateFmt.format(new Date(message.createdAt))}</span>
+      <span className="text-xs text-muted-foreground">
+        {dateFmt.format(new Date(message.createdAt))}
+      </span>
     </div>
   );
 }

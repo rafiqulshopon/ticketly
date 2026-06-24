@@ -1,14 +1,35 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Loader2, Sparkles } from "lucide-react";
 import type { TicketDetail } from "@ticketly/shared";
 import { ApiError, summarizeTicket } from "@/lib/api";
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
 
+/**
+ * Render the summary with minimal markdown: `**bold**` segments (the model often
+ * labels lines like "**Issue:**") become <strong> so they stand out as headers.
+ * Everything else is plain text. React escapes each string, so the model output
+ * can't inject markup. Returns an array of nodes so the surrounding <p> keeps
+ * `whitespace-pre-wrap` for the model's line breaks. Splitting with a capturing
+ * group interleaves the bold content at odd indices.
+ */
+function renderSummary(text: string): ReactNode[] {
+  return text.split(/\*\*(.+?)\*\*/g).map((part, i) =>
+    i % 2 === 1 ? (
+      <strong key={i} className="font-semibold text-foreground">
+        {part}
+      </strong>
+    ) : (
+      part
+    ),
+  );
+}
+
 /** Map a failed summarize mutation to a user-facing message. */
 function toSummaryErrorMessage(err: unknown): string {
   if (err instanceof ApiError) {
-    if (err.status === 502 || err.status === 504) return "The summarize service is unavailable. Try again.";
+    if (err.status === 502 || err.status === 504)
+      return "The summarize service is unavailable. Try again.";
     if (err.status === 404) return "Ticket not found.";
   }
   return err instanceof Error ? err.message : "Couldn't summarize the ticket.";
@@ -44,16 +65,32 @@ export function TicketSummary({ ticket }: { ticket: TicketDetail }) {
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base font-semibold">AI summary</CardTitle>
-        <Button type="button" variant="outline" size="sm" onClick={onSummarize} disabled={mutation.isPending}>
-          {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onSummarize}
+          disabled={mutation.isPending}
+        >
+          {mutation.isPending ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Sparkles className="size-4" />
+          )}
           {summary ? "Regenerate" : "Summarize"}
         </Button>
       </CardHeader>
       <CardContent className="space-y-2">
         {error && <p className="text-sm text-destructive">{error}</p>}
-        {summary && <p className="whitespace-pre-wrap text-sm text-muted-foreground">{summary}</p>}
+        {summary && (
+          <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+            {renderSummary(summary)}
+          </p>
+        )}
         {!summary && !error && !mutation.isPending && (
-          <p className="text-sm text-muted-foreground">Generate a concise summary of this ticket and its conversation.</p>
+          <p className="text-sm text-muted-foreground">
+            Generate a concise summary of this ticket and its conversation.
+          </p>
         )}
       </CardContent>
     </Card>
