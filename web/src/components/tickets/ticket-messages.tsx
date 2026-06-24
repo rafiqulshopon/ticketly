@@ -1,5 +1,6 @@
 import { type ComponentProps } from "react";
 import { type TicketMessage } from "@ticketly/shared";
+import { renderInlineMarkdown } from "@/lib/markdown";
 import { Badge, Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
 
 const dateFmt = new Intl.DateTimeFormat(undefined, {
@@ -60,7 +61,7 @@ function MessageItem({ message }: { message: TicketMessage }) {
           isAgent ? "bg-chat-agent text-chat-agent-foreground" : "bg-muted text-foreground"
         }`}
       >
-        {message.bodyText}
+        {renderInlineMarkdown(message.bodyText)}
       </p>
       <span className="text-xs text-muted-foreground">
         {dateFmt.format(new Date(message.createdAt))}

@@ -1,29 +1,10 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Loader2, Sparkles } from "lucide-react";
 import type { TicketDetail } from "@ticketly/shared";
 import { ApiError, summarizeTicket } from "@/lib/api";
+import { renderInlineMarkdown } from "@/lib/markdown";
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
-
-/**
- * Render the summary with minimal markdown: `**bold**` segments (the model often
- * labels lines like "**Issue:**") become <strong> so they stand out as headers.
- * Everything else is plain text. React escapes each string, so the model output
- * can't inject markup. Returns an array of nodes so the surrounding <p> keeps
- * `whitespace-pre-wrap` for the model's line breaks. Splitting with a capturing
- * group interleaves the bold content at odd indices.
- */
-function renderSummary(text: string): ReactNode[] {
-  return text.split(/\*\*(.+?)\*\*/g).map((part, i) =>
-    i % 2 === 1 ? (
-      <strong key={i} className="font-semibold text-foreground">
-        {part}
-      </strong>
-    ) : (
-      part
-    ),
-  );
-}
 
 /** Map a failed summarize mutation to a user-facing message. */
 function toSummaryErrorMessage(err: unknown): string {
@@ -84,7 +65,7 @@ export function TicketSummary({ ticket }: { ticket: TicketDetail }) {
         {error && <p className="text-sm text-destructive">{error}</p>}
         {summary && (
           <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-            {renderSummary(summary)}
+            {renderInlineMarkdown(summary, "font-semibold text-foreground")}
           </p>
         )}
         {!summary && !error && !mutation.isPending && (
