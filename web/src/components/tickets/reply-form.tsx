@@ -105,11 +105,9 @@ export function ReplyForm({ ticket }: { ticket: TicketDetail }) {
             placeholder="Type your reply…"
             rows={5}
             aria-label="Reply body"
-            aria-invalid={errors.bodyText ? true : undefined}
             disabled={isSubmitting}
             {...register("bodyText")}
           />
-          {errors.bodyText && <p className="text-sm text-destructive">{errors.bodyText.message}</p>}
           {errors.root && <p className="text-sm text-destructive">{errors.root.message}</p>}
           <div className="flex items-center justify-end gap-2">
             <Button
@@ -122,7 +120,7 @@ export function ReplyForm({ ticket }: { ticket: TicketDetail }) {
               <Wand2 className="size-4" />
               {polish.isPending ? "Polishing…" : "Polish"}
             </Button>
-            <Button type="submit" disabled={isSubmitting || polish.isPending}>
+            <Button type="submit" disabled={isSubmitting || polish.isPending || !bodyText.trim()}>
               {isSubmitting ? "Sending…" : "Send reply"}
             </Button>
           </div>
