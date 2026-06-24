@@ -57,6 +57,19 @@ export const createTicketSchema = z.object({
 
 export type CreateTicketInput = z.infer<typeof createTicketSchema>;
 
+/**
+ * Input for replying to a ticket. Drives POST /tickets/:id/replies. Only the
+ * plain-text body is accepted — `bodyHtml` is intentionally absent (the detail
+ * view drops untrusted email HTML to avoid XSS, and there is no rich-text
+ * composer). The backend derives the email envelope (from/to/subject/inReplyTo)
+ * and `senderType` from the ticket + the signed-in sender.
+ */
+export const createReplySchema = z.object({
+  bodyText: z.string().trim().min(1, "Reply cannot be empty"),
+});
+
+export type CreateReplyInput = z.infer<typeof createReplySchema>;
+
 /** Inbound payload shape for listing/filtering tickets (Phase 2). */
 export const listTicketsQuerySchema = z.object({
   q: z
@@ -111,6 +124,10 @@ export type TicketListResponse = z.infer<typeof ticketListResponseSchema>;
  *  path). */
 export const messageDirectionEnum = z.enum(["inbound", "outbound"]);
 
+/** Who authored a message: the staff agent ("agent") or the ticket requester
+ *  ("customer"). Mirrors the Postgres `MessageSenderType` enum — keep in sync. */
+export const messageSenderTypeEnum = z.enum(["agent", "customer"]);
+
 /** A single message in a ticket's conversation thread. `senderName` is the
  *  staff agent for outbound replies (resolved from the `sender` relation) and
  *  null for inbound messages, where the author is the external `fromEmail`.
@@ -119,6 +136,7 @@ export const messageDirectionEnum = z.enum(["inbound", "outbound"]);
 export const ticketMessageSchema = z.object({
   id: z.string(),
   direction: messageDirectionEnum,
+  senderType: messageSenderTypeEnum,
   fromEmail: z.string(),
   toEmail: z.string(),
   senderName: z.string().nullable(),

@@ -106,6 +106,13 @@ enum Priority {
   HIGH
 }
 
+// Who authored a message: the staff agent or the ticket requester (customer).
+// Mirrors the shared `messageSenderTypeEnum`.
+enum MessageSenderType {
+  agent
+  customer
+}
+
 model Ticket {
   id             Int            @id @default(autoincrement())
   subject        String
@@ -133,6 +140,7 @@ model Message {
   ticketId    Int
   ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   direction   String // "inbound" | "outbound"
+  senderType  MessageSenderType // who authored this message (agent | customer)
   fromEmail   String
   toEmail     String
   subject     String?

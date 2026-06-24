@@ -14,6 +14,7 @@ import {
 } from "@/components/ui";
 import { AssigneeSelect } from "@/components/tickets/assignee-select";
 import { PropertySelect } from "@/components/tickets/property-select";
+import { ReplyForm } from "@/components/tickets/reply-form";
 import { PRIORITY_BADGES, STATUS_BADGES, prettifyEnum } from "@/components/tickets/tickets-table";
 
 const dateFmt = new Intl.DateTimeFormat(undefined, {
@@ -32,11 +33,12 @@ function toErrorMessage(err: unknown): string {
 
 type BadgeVariant = ComponentProps<typeof Badge>["variant"];
 
-// Direction → label + badge variant, keyed by the enum (object map, not a switch,
-// so adding a direction is a type error until it's mapped here).
-const MESSAGE_DIRECTION: Record<TicketMessage["direction"], { label: string; variant: BadgeVariant }> = {
-  inbound: { label: "Inbound", variant: "secondary" },
-  outbound: { label: "Outbound", variant: "default" },
+// senderType → label + badge variant (object map, not a switch — adding a value
+// is a type error until it's mapped here). The explicit `senderType` is the
+// source of truth for the Agent/Customer distinction in the thread.
+const MESSAGE_SENDER_TYPE: Record<TicketMessage["senderType"], { label: string; variant: BadgeVariant }> = {
+  customer: { label: "Customer", variant: "secondary" },
+  agent: { label: "Agent", variant: "default" },
 };
 
 // Select options derived from the existing badge map / enum — no re-hardcoded
@@ -79,6 +81,7 @@ export function TicketDetailsPage() {
           <div className="space-y-4 lg:col-span-2">
             <TicketHeader ticket={data} />
             <ConversationCard messages={data.messages} />
+            <ReplyForm ticket={data} />
           </div>
           <aside className="self-start lg:col-span-1 lg:sticky lg:top-8">
             <PropertiesCard ticket={data} />
@@ -124,21 +127,21 @@ function ConversationCard({ messages }: { messages: TicketMessage[] }) {
 }
 
 function MessageItem({ message }: { message: TicketMessage }) {
-  const meta = MESSAGE_DIRECTION[message.direction];
-  const isInbound = message.direction === "inbound";
-  // Inbound: the author is the external sender (fromEmail). Outbound: the staff
-  // agent (senderName), replying to the requester (toEmail).
-  const author = isInbound ? message.fromEmail : message.senderName ?? "Support team";
+  const meta = MESSAGE_SENDER_TYPE[message.senderType];
+  const isAgent = message.senderType === "agent";
+  // Customer: the external author (fromEmail). Agent: the staff agent (senderName),
+  // replying to the requester (toEmail).
+  const author = isAgent ? message.senderName ?? "Support team" : message.fromEmail;
   return (
-    <div className={`flex flex-col gap-1 ${isInbound ? "items-start" : "items-end"}`}>
+    <div className={`flex flex-col gap-1 ${isAgent ? "items-end" : "items-start"}`}>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Badge variant={meta.variant}>{meta.label}</Badge>
         <span className="font-medium text-foreground">{author}</span>
-        {!isInbound && <span>→ {message.toEmail}</span>}
+        {isAgent && <span>→ {message.toEmail}</span>}
       </div>
       <p
         className={`max-w-[80%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm ${
-          isInbound ? "bg-muted text-foreground" : "bg-primary text-primary-foreground"
+          isAgent ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
         }`}
       >
         {message.bodyText}

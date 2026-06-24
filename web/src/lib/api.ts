@@ -1,6 +1,7 @@
 import axios, { type AxiosRequestConfig } from "axios";
 import type {
   AssigneeOption,
+  CreateReplyInput,
   CreateUserInput,
   EditUserInput,
   TicketDetail,
@@ -160,6 +161,22 @@ export async function updateTicket(
 ): Promise<TicketDetail> {
   return api<TicketDetail>(`/tickets/${encodeURIComponent(id)}`, {
     method: "PATCH",
+    data: input,
+    ...config,
+  });
+}
+
+/** Reply to a ticket — appends an outbound agent message to the thread. Returns
+ *  the refreshed ticket (same shape as updateTicket) so the caller can
+ *  setQueryData directly. Throws `ApiError(status)` (400 empty body, 404 unknown
+ *  ticket, 403 wrong role) on failure. */
+export async function replyToTicket(
+  id: number,
+  input: CreateReplyInput,
+  config?: AxiosRequestConfig,
+): Promise<TicketDetail> {
+  return api<TicketDetail>(`/tickets/${encodeURIComponent(id)}/replies`, {
+    method: "POST",
     data: input,
     ...config,
   });

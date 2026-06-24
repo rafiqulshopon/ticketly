@@ -1,14 +1,18 @@
 import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
-import { Roles } from "@thallesp/nestjs-better-auth";
+import { Roles, Session } from "@thallesp/nestjs-better-auth";
+import type { UserSession } from "@thallesp/nestjs-better-auth";
 import { ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
 import {
+  createReplySchema,
   createTicketSchema,
   listTicketsQuerySchema,
   updateTicketSchema,
+  type CreateReplyInput,
   type CreateTicketInput,
   type ListTicketsQuery,
   type UpdateTicketInput,
 } from "@ticketly/shared";
+import { auth } from "../auth/auth.config";
 import { TicketsService } from "./tickets.service";
 
 /**
@@ -73,6 +77,25 @@ export class TicketsController {
       throw new BadRequestException("Invalid ticket data");
     }
     return this.tickets.update(Number(id), input);
+  }
+
+  @ApiOperation({ summary: "Reply to a ticket (append an outbound message)" })
+  @Post(":id/replies")
+  reply(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    // @Session() is the better-auth param decorator; `session.user.id` is the
+    // signed-in agent who becomes the reply's sender. First consumer of @Session
+    // in this repo.
+    @Session() session: UserSession<typeof auth>,
+  ) {
+    let input: CreateReplyInput;
+    try {
+      input = createReplySchema.parse(body);
+    } catch {
+      throw new BadRequestException("Invalid reply data");
+    }
+    return this.tickets.reply(Number(id), input, session.user.id);
   }
 
   @ApiOperation({ summary: "Create a ticket from an inbound request (email-like)" })

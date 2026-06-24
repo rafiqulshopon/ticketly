@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type {
   AssigneeOption,
+  CreateReplyInput,
   CreateTicketInput,
   ListTicketsQuery,
   Ticket,
@@ -65,6 +66,7 @@ export class TicketsService {
           data: {
             ticketId: created.id,
             direction: "inbound",
+            senderType: "customer",
             fromEmail: input.requesterEmail,
             toEmail: SUPPORT_INBOUND_ADDRESS,
             subject: input.subject,
@@ -171,6 +173,7 @@ export class TicketsService {
       messages: ticket.messages.map((m) => ({
         id: m.id,
         direction: m.direction as "inbound" | "outbound",
+        senderType: m.senderType,
         fromEmail: m.fromEmail,
         toEmail: m.toEmail,
         senderName: m.sender ? m.sender.name : null,
@@ -180,6 +183,55 @@ export class TicketsService {
       createdAt: ticket.createdAt.toISOString(),
       updatedAt: ticket.updatedAt.toISOString(),
     };
+  }
+
+  /**
+   * Reply to a ticket — appends an outbound `Message` authored by the signed-in
+   * staff agent (`senderId`), addressed to the requester. The email envelope is
+   * derived from the ticket (from = the support address, to = requester, subject
+   * = "Re: <subject>", inReplyTo = the originating inbound Message-ID when the
+   * ticket came from email). `bodyHtml` is intentionally null — there is no
+   * rich-text composer and the detail view never trusts composed HTML.
+   *
+   * Replying to an OPEN ticket also flips it to AWAITING_STUDENT (the agent has
+   * replied, now waiting on the requester); RESOLVED/CLOSED tickets are left
+   * untouched — no silent reopen. Both writes happen in one transaction.
+   *
+   * There is no outbound mail provider wired yet, so nothing is actually emailed
+   * — the reply lives in-thread only (visible via findOne). Throws
+   * NotFoundException (404) for an unknown ticket. Unscoped (shared inbox),
+   * matching list()/findOne().
+   */
+  async reply(ticketId: number, input: CreateReplyInput, senderId: string): Promise<TicketDetail> {
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: { id: true, status: true, subject: true, requesterEmail: true, messageId: true },
+    });
+    if (!ticket) throw new NotFoundException("Ticket not found");
+
+    const nextStatus = ticket.status === "OPEN" ? "AWAITING_STUDENT" : undefined;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.message.create({
+        data: {
+          ticketId: ticket.id,
+          direction: "outbound",
+          senderType: "agent",
+          fromEmail: SUPPORT_INBOUND_ADDRESS,
+          toEmail: ticket.requesterEmail,
+          subject: `Re: ${ticket.subject}`,
+          bodyText: input.bodyText,
+          bodyHtml: null,
+          senderId,
+          inReplyTo: ticket.messageId ?? null,
+        },
+      });
+      if (nextStatus) {
+        await tx.ticket.update({ where: { id: ticket.id }, data: { status: nextStatus } });
+      }
+    });
+
+    return this.findOne(ticketId);
   }
 
   /**
