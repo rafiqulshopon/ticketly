@@ -1,6 +1,8 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
+import { APP_FILTER } from "@nestjs/core";
 import { AuthModule as BetterAuthModule } from "@thallesp/nestjs-better-auth";
+import { SentryGlobalFilter } from "@sentry/nestjs/setup";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { PrismaModule } from "./prisma/prisma.module";
@@ -38,6 +40,11 @@ import { auth } from "./auth/auth.config";
     }),
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    // Captures every unhandled route/controller exception to Sentry. Listed as
+    // the sole global filter (no pre-existing catch-all to preserve).
+    { provide: APP_FILTER, useClass: SentryGlobalFilter },
+    AppService,
+  ],
 })
 export class AppModule {}

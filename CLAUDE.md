@@ -41,7 +41,8 @@ Build ordering matters: **`shared` must build before `api` and `web`** (both imp
 - Global route prefix is **`/api`**; **`/health` is intentionally excluded** and served at the root — `GET /health` → `{ status, service, time }`.
 - **CORS** allowlist comes from `WEB_ORIGIN` (comma-separated) in `api/src/main.ts`; defaults to `http://localhost:5173`. Set it to the frontend origin in production.
 - **Better Auth** is mounted via `@thallesp/nestjs-better-auth` (`AuthModule.forRoot({ auth })` in `app.module.ts`) at `/api/auth/*` with a **global `AuthGuard`**. The full setup — config, roles, closed registration, client flow — is in the **Authentication** section below.
-- **Env-load ordering gotcha:** `api/src/auth/auth.config.ts` constructs its `PrismaClient` at **import time**, which runs *before* Nest's `ConfigModule` loads `.env` — so `DATABASE_URL` was empty and Better Auth hit `ECONNREFUSED`. Fixed by `import "dotenv/config"` as the **first line of `main.ts`**. Do not remove it.
+- **Env-load ordering gotcha:** `api/src/auth/auth.config.ts` constructs its `PrismaClient` at **import time**, which runs *before* Nest's `ConfigModule` loads `.env` — so `DATABASE_URL` was empty and Better Auth hit `ECONNREFUSED`. Fixed by loading `dotenv/config` before any app module. It now lives as the **first line of `api/src/instrument.ts`**, which `main.ts` imports as its very first line (ahead of Sentry init). Do not move dotenv out of that first-import position.
+- **Sentry** (error logging, errors-only) is initialized in `api/src/instrument.ts` (`@sentry/nestjs`); `SentryGlobalFilter` is the global exception filter in `app.module.ts`. Disabled when `SENTRY_DSN` is unset. On the web side, `@sentry/react` `Sentry.init` + `Sentry.ErrorBoundary` are in `web/src/main.tsx`; source-map upload via `@sentry/vite-plugin` is gated on `SENTRY_AUTH_TOKEN` in `vite.config.ts`.
 - Port from `PORT` env (default 3000).
 
 ## Frontend (`web/`) conventions

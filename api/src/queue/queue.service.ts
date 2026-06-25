@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import * as Sentry from "@sentry/nestjs";
 import { PgBoss, type SendOptions, type WorkHandler, type WorkOptions } from "pg-boss";
 
 /**
@@ -28,6 +29,7 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
     // etc.). Handler-thrown job errors are NOT routed here — those are caught,
     // retried, and (once exhausted) marked failed in the queue itself.
     this.boss.on("error", (error: Error) => {
+      Sentry.captureException(error);
       this.logger.error(`pg-boss: ${error.message}`, error.stack);
     });
   }

@@ -1,10 +1,36 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { sentryVitePlugin } from "@sentry/vite-plugin";
 import path from "node:path";
 
 export default defineConfig(({ command }) => ({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    // Source-map upload runs only during `vite build` AND only when
+    // SENTRY_AUTH_TOKEN is set (CI/prod). Local/dev builds are untouched: no
+    // upload, no .map files. org/project/authToken are build-time process.env
+    // values — never VITE_-prefixed, so the auth token stays server-side.
+    ...(command === "build" && process.env.SENTRY_AUTH_TOKEN
+      ? [
+          sentryVitePlugin({
+            org: process.env.SENTRY_ORG,
+            project: process.env.SENTRY_PROJECT,
+            authToken: process.env.SENTRY_AUTH_TOKEN,
+            sourcemaps: { filesToDeleteAfterUpload: ["./dist/**/*.map"] },
+          }),
+        ]
+      : []),
+  ],
+  build: {
+    // Emitted only when we're uploading them (see plugins above). "hidden"
+    // generates maps but omits the `//# sourceMappingURL=` comment so the
+    // browser never fetches them — Sentry owns the readable stack traces.
+    ...(command === "build" && process.env.SENTRY_AUTH_TOKEN
+      ? { sourcemap: "hidden" as const }
+      : {}),
+  },
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "./src"),

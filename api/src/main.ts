@@ -1,4 +1,7 @@
-import "dotenv/config"; // must run before AppModule imports auth.config.ts, which builds the Better Auth PrismaClient at import time (needs DATABASE_URL)
+// Imported first so Sentry (and the dotenv load it owns) run before AppModule
+// imports auth.config.ts, which builds the Better Auth PrismaClient at import
+// time and needs DATABASE_URL. See ./instrument.ts.
+import "./instrument";
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
