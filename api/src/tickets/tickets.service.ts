@@ -17,6 +17,12 @@ import type { Ticket as TicketRow } from "../generated/prisma/client";
 import { AiService } from "../ai/ai.service";
 import { sanitizeEmailHtml } from "../common/sanitize-html";
 import { PrismaService } from "../prisma/prisma.service";
+import {
+  CLASSIFY_TICKET_QUEUE,
+  CLASSIFY_TICKET_SEND_OPTIONS,
+  type ClassifyTicketJobData,
+} from "../queue/queue.constants";
+import { QueueService } from "../queue/queue.service";
 
 /**
  * Placeholder destination for the first inbound message on a ticket. There is no
@@ -44,6 +50,7 @@ export class TicketsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ai: AiService,
+    private readonly queue: QueueService,
   ) {}
 
   async create(
@@ -92,14 +99,23 @@ export class TicketsService {
         return created;
       });
 
-      // Non-blocking AI classification: fire it off WITHOUT awaiting, so ticket
-      // creation returns immediately and the LLM latency (seconds) never blocks
-      // the response (or the inbound-email webhook). Only when no explicit
-      // category was provided — an explicit one is respected, never overwritten.
-      // classifyInBackground catches everything internally, so this never throws
-      // or produces an unhandled rejection.
+      // Enqueue a durable classify job (pg-boss) when no explicit category was
+      // provided — an explicit one is respected, never overwritten. Enqueueing is
+      // a fast DB insert, so the LLM latency (seconds) still never blocks the
+      // create response. A queue hiccup is caught and logged so it can never fail
+      // ticket creation; worst case the ticket is left to be classified later.
       if (input.category == null) {
-        void this.classifyInBackground(ticket.id, input.subject, input.bodyText);
+        try {
+          await this.queue.send<ClassifyTicketJobData>(
+            CLASSIFY_TICKET_QUEUE,
+            { ticketId: ticket.id, subject: input.subject, body: input.bodyText },
+            CLASSIFY_TICKET_SEND_OPTIONS,
+          );
+        } catch (err) {
+          this.logger.warn(
+            `Classify: enqueue failed for ticket ${ticket.id}, leaving it uncategorized — ${err instanceof Error ? err.message : err}`,
+          );
+        }
       }
 
       return { ticket, created: true };
@@ -111,30 +127,6 @@ export class TicketsService {
         if (existing) return { ticket: existing, created: false };
       }
       throw err;
-    }
-  }
-
-  /**
-   * Classify a ticket in the background and write its `category`. MUST be called
-   * fire-and-forget (never awaited by the caller): it runs after the create
-   * response has been sent, so the model call never blocks creation. Any failure
-   * — model outage, network error, or an unparseable reply — is logged and
-   * swallowed, so the worst case is the ticket stays uncategorized (category
-   * null) instead of blocking or crashing the process. This is the in-process
-   * stand-in for the planned Inngest `on Ticket created` classify job; the
-   * underlying `AiService.classifyTicket` call is reused as-is when that lands.
-   */
-  private async classifyInBackground(id: number, subject: string, body: string): Promise<void> {
-    try {
-      const category = await this.ai.classifyTicket(subject, body);
-      if (!category) {
-        this.logger.warn(`Classify: ticket ${id} returned no usable category — leaving it uncategorized.`);
-        return;
-      }
-      await this.prisma.ticket.update({ where: { id }, data: { category } });
-      this.logger.log(`Classify: ticket ${id} → ${category}.`);
-    } catch (err) {
-      this.logger.warn(`Classify: failed for ticket ${id} — ${err instanceof Error ? err.message : err}`);
     }
   }
 

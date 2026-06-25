@@ -39,8 +39,8 @@ Decoupled architecture: a **React SPA frontend** and a **NestJS backend API**, t
 
 ## Background jobs
 
-- **Inngest** — ticket-arrival fan-out (classify + generate draft) with retries and observability.
-  - _Alternative: BullMQ + Redis if you'd rather self-host the queue._
+- **pg-boss** — Postgres-backed job queue for the ticket-arrival fan-out (classify, and later draft/summarize) with retries and observability. Chosen because it reuses the existing Postgres — no Redis or extra service to run (unlike Inngest/BullMQ). pg-boss manages its own `pgboss` schema; the worker runs in the API process today and can be split out later.
+  - _Alternative considered: Inngest or BullMQ + Redis if a hosted/Redis-backed queue is ever preferred._
 
 ## Infrastructure & deploy
 

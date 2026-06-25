@@ -9,6 +9,11 @@ async function bootstrap() {
   // body on /api/auth/* routes; it re-adds JSON/urlencoded parsing for the rest.
   const app = await NestFactory.create(AppModule, { bodyParser: false });
 
+  // Wire Nest lifecycle hooks to SIGTERM/SIGINT so `onModuleDestroy` runs on
+  // shutdown. pg-boss's QueueService.stop() (graceful drain) and Prisma's
+  // $disconnect both depend on this; without it neither fires on exit.
+  app.enableShutdownHooks();
+
   // All app routes live under /api; health stays at the root.
   app.setGlobalPrefix("api", { exclude: ["health"] });
   app.enableCors({

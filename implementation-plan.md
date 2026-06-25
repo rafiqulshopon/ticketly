@@ -98,8 +98,8 @@ _Frontend (`web/`):_
 **Goal:** AI-assisted human-in-the-loop drafting — the product's core value.
 
 - [ ] GLM client wrapper (Zhipu OpenAI-compatible endpoint; config for GLM 5.2 + the Flash-tier model)
-- [ ] Inngest setup; `on Ticket created` → fan-out job
-- [ ] **Classify** job (Flash-tier GLM): category, priority, spam flag → write to ticket
+- [x] **pg-boss** job queue setup (reuses Postgres, no Redis); `on Ticket created` → enqueue classify job — _see `api/src/queue/` + `ClassifyTicketConsumer`_
+- [x] **Classify** job (Flash-tier GLM): **category** → write to ticket — _durable + retried; priority/spam-flag still TODO_
 - [ ] **Summarize** job (Flash-tier GLM): thread summary
 - [ ] **Draft** job (GLM 5.2): retrieve KB chunks (RAG) → grounded draft **with citations** to source chunks
 - [ ] Draft UI: show draft + cited sources + classification + summary; edit-in-place; **Send** (→ outbound + AwaitingStudent) and **Regenerate**
@@ -117,7 +117,7 @@ _Frontend (`web/`):_
 - [ ] Admin user management UI (create/disable agents, assign category/skill for routing)
 - [ ] Routing rules: category/priority → assignee (rule-based)
 - [ ] Dashboard metrics: ticket volume, draft-acceptance rate, avg time-to-send, category breakdown, KB-gap flags
-- [ ] Auto-close: Resolved → Closed after N days of silence (scheduled Inngest job)
+- [ ] Auto-close: Resolved → Closed after N days of silence (scheduled pg-boss job)
 - [ ] Global search across tickets / messages
 - [ ] Notifications (new ticket, assigned to me)
 
@@ -130,7 +130,7 @@ _Frontend (`web/`):_
 - [ ] Frontend deploy (Vercel); backend deploy (Railway); production Neon DB
 - [ ] DNS: SPF / DKIM / DMARC for the SendGrid sending domain; verify deliverability
 - [ ] Security review: webhook signature checks, authz on every endpoint, CORS allowlist, Zod input validation, rate limiting, secrets management
-- [ ] Observability: structured logging, error tracking (Sentry), Inngest dashboards, LLM cost/token logging
+- [ ] Observability: structured logging, error tracking (Sentry), pg-boss job dashboards, LLM cost/token logging
 - [ ] Backups + retention policy; PII handling (ties to FERPA if applicable)
 - [ ] Tests: unit (services), integration (API), E2E (critical flow: inbound → ticket → draft → send)
 - [ ] Load sanity at hundreds/day; queue and cost monitoring
@@ -144,7 +144,7 @@ These resolve the open gaps from scoping so the plan is buildable. Flag any you 
 - **Statuses:** Open, **AwaitingStudent**, Resolved, Closed — added _AwaitingStudent_ (the gap I flagged earlier; it's the most-used state once agents send replies).
 - **Priority** is its own field (Low/Normal/High), separate from category.
 - **Spam / out-of-scope** handled as a status or category bucket.
-- **Drafts are generated lazily** (when a ticket is opened) via Inngest, not eagerly on every arrival — cost control at hundreds/day.
+- **Drafts are generated lazily** (when a ticket is opened) via pg-boss, not eagerly on every arrival — cost control at hundreds/day.
 - **Routing** is rule-based (category/priority → assignee), added in Phase 6.
 - **Attachments** are captured in Phase 3; **multimodal AI** (reading screenshots) is deferred unless you want it earlier.
 - **Compliance** (e.g. FERPA) is touched in Phase 7 — move earlier if it shapes data handling.
