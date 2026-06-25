@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { ApiError, getDashboardStats } from "@/lib/api";
-import { Button, Card, CardContent } from "@/components/ui";
+import { Button, Card, CardContent, CardHeader, Skeleton } from "@/components/ui";
 import { StatCard } from "@/components/dashboard/stat-card";
+import { TicketsPerDayChart } from "@/components/dashboard/tickets-per-day-chart";
 import { formatDuration } from "@/lib/format";
 
 function toErrorMessage(err: unknown): string {
@@ -24,10 +25,21 @@ export function DashboardPage() {
       <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
 
       {isPending ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 5 }, (_, i) => (
-            <StatCard key={i} label="" value="" isLoading />
-          ))}
+        <div className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 5 }, (_, i) => (
+              <StatCard key={i} label="" value="" isLoading />
+            ))}
+          </div>
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-5 w-36" />
+              <Skeleton className="h-3 w-20" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-70 w-full" />
+            </CardContent>
+          </Card>
         </div>
       ) : isError ? (
         <Card>
@@ -39,16 +51,19 @@ export function DashboardPage() {
           </CardContent>
         </Card>
       ) : data ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <StatCard label="Total tickets" value={data.totalTickets.toLocaleString()} />
-          <StatCard label="Open tickets" value={data.openTickets.toLocaleString()} />
-          <StatCard
-            label="Resolved by AI"
-            value={data.resolvedByAi.toLocaleString()}
-            description={`of ${data.totalResolved.toLocaleString()} resolved`}
-          />
-          <StatCard label="AI resolution rate" value={`${data.aiResolutionRate.toFixed(1)}%`} />
-          <StatCard label="Avg. resolution time" value={formatDuration(data.avgResolutionTimeMs)} />
+        <div className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <StatCard label="Total tickets" value={data.totalTickets.toLocaleString()} />
+            <StatCard label="Open tickets" value={data.openTickets.toLocaleString()} />
+            <StatCard
+              label="Resolved by AI"
+              value={data.resolvedByAi.toLocaleString()}
+              description={`of ${data.totalResolved.toLocaleString()} resolved`}
+            />
+            <StatCard label="AI resolution rate" value={`${data.aiResolutionRate.toFixed(1)}%`} />
+            <StatCard label="Avg. resolution time" value={formatDuration(data.avgResolutionTimeMs)} />
+          </div>
+          <TicketsPerDayChart data={data.ticketsPerDay} />
         </div>
       ) : null}
     </div>

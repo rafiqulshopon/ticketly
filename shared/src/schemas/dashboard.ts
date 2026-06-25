@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+/** One day's ticket count in the per-day series — UTC calendar day (YYYY-MM-DD). */
+export const ticketDayCountSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  count: z.number().int().min(0),
+});
+export type TicketDayCount = z.infer<typeof ticketDayCountSchema>;
+
 /** Aggregate metrics returned by `GET /api/dashboard/stats` (admin only). */
 export const dashboardStatsSchema = z.object({
   /** Every ticket, regardless of status. */
@@ -14,6 +21,8 @@ export const dashboardStatsSchema = z.object({
   aiResolutionRate: z.number().min(0).max(100),
   /** Mean `resolvedAt − createdAt` in ms over resolved tickets; null if none. */
   avgResolutionTimeMs: z.number().int().min(0).nullable(),
+  /** Tickets created per UTC day for the last 30 days, oldest → newest (zero-filled). */
+  ticketsPerDay: z.array(ticketDayCountSchema),
 });
 
 export type DashboardStats = z.infer<typeof dashboardStatsSchema>;

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import type { DashboardStats } from "@ticketly/shared";
+import type { DashboardStats, TicketDayCount } from "@ticketly/shared";
 import type { TicketStatus } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { SystemAgentService } from "../system-agent/system-agent.service";
@@ -28,7 +28,7 @@ export class DashboardService {
     // AI replies are attributed to the system AI user (senderId = its id); legacy
     // replies (pre-attribution) have senderId null. Count both so the metric holds.
     const aiAgentId = await this.systemAgent.getAiAgentId();
-    const [totalTickets, openTickets, totalResolved, resolvedByAi, resolved] = await Promise.all([
+    const [totalTickets, openTickets, totalResolved, resolvedByAi, resolved, ticketsPerDay] = await Promise.all([
       this.prisma.ticket.count(),
       // "Open" = everything that isn't resolved (NEW, PROCESSING, OPEN, AWAITING_STUDENT).
       this.prisma.ticket.count({ where: { status: { notIn: RESOLVED_STATUSES } } }),
@@ -51,6 +51,7 @@ export class DashboardService {
         where: { status: { in: RESOLVED_STATUSES }, resolvedAt: { not: null } },
         select: { createdAt: true, resolvedAt: true },
       }),
+      this.getTicketsPerDay(),
     ]);
 
     const aiResolutionRate =
@@ -69,6 +70,38 @@ export class DashboardService {
       resolvedByAi,
       aiResolutionRate,
       avgResolutionTimeMs,
+      ticketsPerDay,
     };
+  }
+
+  /**
+   * Tickets created per UTC day for the last 30 days (oldest → newest). Buckets
+   * with `DATE()` in Postgres (UTC, matching Neon's timezone), then zero-fills any
+   * missing days in JS so the chart always shows a continuous 30-point series.
+   * Table/column are quoted because Prisma maps `Ticket` → `tickets` and keeps the
+   * camelCase `createdAt` column (see `@@map` in schema.prisma).
+   */
+  private async getTicketsPerDay(): Promise<TicketDayCount[]> {
+    const start = new Date();
+    start.setUTCHours(0, 0, 0, 0);
+    start.setUTCDate(start.getUTCDate() - 29); // 30 buckets ending today
+
+    const rows = await this.prisma.$queryRaw<{ day: Date; count: number }[]>`
+      SELECT DATE("createdAt") AS day, COUNT(*)::int AS count
+      FROM "tickets"
+      WHERE "createdAt" >= ${start}
+      GROUP BY day
+    `;
+
+    const byDay = new Map(rows.map((r) => [r.day.toISOString().slice(0, 10), Number(r.count)]));
+    const series: TicketDayCount[] = [];
+    const today = new Date();
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(today);
+      d.setUTCDate(d.getUTCDate() - i);
+      const date = d.toISOString().slice(0, 10);
+      series.push({ date, count: byDay.get(date) ?? 0 });
+    }
+    return series;
   }
 }

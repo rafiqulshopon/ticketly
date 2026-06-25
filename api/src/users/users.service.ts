@@ -9,6 +9,7 @@ import type { CreateUserInput, EditUserInput, UserListItem, UserListResponse } f
 import { PrismaService } from "../prisma/prisma.service";
 import { auth } from "../auth/auth.config";
 import { Role, type User } from "../generated/prisma/client";
+import { SYSTEM_AGENT_EMAIL } from "../tickets/tickets.constants";
 
 /**
  * Admin user directory. Reads query the Better Auth `User` table directly
@@ -31,6 +32,9 @@ export class UsersService {
     // Soft-deleted users (deletedAt set) are always excluded.
     const where = {
       deletedAt: null,
+      // The AI system agent is internal (it works auto-resolve tickets) — never
+      // surface it in the staff directory, or it becomes editable/deletable.
+      email: { not: SYSTEM_AGENT_EMAIL },
       ...(q
         ? {
             OR: [
@@ -173,6 +177,9 @@ export class UsersService {
     }
     if (user.role === Role.admin) {
       throw new BadRequestException("Admins cannot be deleted");
+    }
+    if (user.email === SYSTEM_AGENT_EMAIL) {
+      throw new BadRequestException("The AI system agent cannot be deleted");
     }
 
     const requestHeaders = headers as Record<string, string>;
