@@ -87,6 +87,8 @@ enum Role {
 }
 
 enum TicketStatus {
+  NEW
+  PROCESSING
   OPEN
   AWAITING_STUDENT
   RESOLVED
@@ -116,7 +118,7 @@ enum MessageSenderType {
 model Ticket {
   id             Int            @id @default(autoincrement())
   subject        String
-  status         TicketStatus   @default(OPEN)
+  status         TicketStatus   @default(NEW)
   category       TicketCategory?
   priority       Priority       @default(NORMAL)
   requesterEmail String

@@ -24,7 +24,11 @@ const ALL = "__all__";
 type Option = { value: string; label: string };
 
 // Option labels mirror the table's badge labels so a filter and its badge read the same.
+// New/Processing are the AI auto-resolution pipeline states — hidden from the
+// default list but selectable here for oversight.
 const STATUS_OPTIONS: Option[] = [
+  { value: "NEW", label: "New" },
+  { value: "PROCESSING", label: "Processing" },
   { value: "OPEN", label: "Open" },
   { value: "AWAITING_STUDENT", label: "Awaiting" },
   { value: "RESOLVED", label: "Resolved" },

@@ -3,6 +3,8 @@ import { userRoleEnum } from "./user";
 
 /** Mirrors the Postgres enums in api/prisma/schema.prisma — keep in sync. */
 export const ticketStatusEnum = z.enum([
+  "NEW",
+  "PROCESSING",
   "OPEN",
   "AWAITING_STUDENT",
   "RESOLVED",

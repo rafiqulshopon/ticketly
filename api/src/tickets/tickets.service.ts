@@ -13,11 +13,14 @@ import type {
   TicketListResponse,
   UpdateTicketInput,
 } from "@ticketly/shared";
-import type { Ticket as TicketRow } from "../generated/prisma/client";
+import type { Ticket as TicketRow, TicketStatus } from "../generated/prisma/client";
 import { AiService } from "../ai/ai.service";
 import { sanitizeEmailHtml } from "../common/sanitize-html";
 import { PrismaService } from "../prisma/prisma.service";
 import {
+  AUTO_RESOLVE_TICKET_QUEUE,
+  AUTO_RESOLVE_TICKET_SEND_OPTIONS,
+  type AutoResolveTicketJobData,
   CLASSIFY_TICKET_QUEUE,
   CLASSIFY_TICKET_SEND_OPTIONS,
   type ClassifyTicketJobData,
@@ -28,9 +31,16 @@ import { QueueService } from "../queue/queue.service";
  * Placeholder destination for the first inbound message on a ticket. There is no
  * real support address yet; when a real email provider is wired this becomes the
  * configured inbound address the requester mailed. It only fills the required
- * `Message.toEmail` column.
+ * `Message.toEmail` column (and the `fromEmail` of outbound replies, including
+ * AI auto-resolve replies).
  */
-const SUPPORT_INBOUND_ADDRESS = "support@ticketly.local";
+export const SUPPORT_INBOUND_ADDRESS = "support@ticketly.local";
+
+/** Statuses the AI auto-resolution pipeline owns (NEW = just arrived,
+ *  PROCESSING = AI is attempting to resolve). Hidden from the default ticket
+ *  list so the inbox shows only tickets that need a human; an explicit status
+ *  filter selection is always honored over this default exclusion. */
+const HIDDEN_FROM_DEFAULT_LIST: TicketStatus[] = ["NEW", "PROCESSING"];
 
 /**
  * Ticket creation — the single write path used by both:
@@ -72,7 +82,7 @@ export class TicketsService {
             subject: input.subject,
             requesterEmail: input.requesterEmail,
             requesterName: input.requesterName,
-            // status/priority use the schema defaults (OPEN / NORMAL). category has
+            // status/priority use the schema defaults (NEW / NORMAL). category has
             // no default — store null when omitted (assigned later by AI classify).
             category: input.category ?? null,
             messageId,
@@ -118,6 +128,31 @@ export class TicketsService {
         }
       }
 
+      // Enqueue a durable auto-resolve job for every new ticket. The consumer
+      // drives NEW → PROCESSING → (RESOLVED | OPEN) using the knowledge base.
+      // Same fast-DB-insert posture as classify: the LLM latency never blocks the
+      // create response. If the enqueue itself fails (rare — it's the same DB the
+      // ticket was just written to), fall the ticket back to OPEN so it's never
+      // stranded invisible in NEW waiting for a job that was never queued.
+      try {
+        await this.queue.send<AutoResolveTicketJobData>(
+          AUTO_RESOLVE_TICKET_QUEUE,
+          { ticketId: ticket.id },
+          AUTO_RESOLVE_TICKET_SEND_OPTIONS,
+        );
+      } catch (err) {
+        this.logger.warn(
+          `Auto-resolve: enqueue failed for ticket ${ticket.id}, moving it to OPEN — ${err instanceof Error ? err.message : err}`,
+        );
+        try {
+          await this.prisma.ticket.update({ where: { id: ticket.id }, data: { status: "OPEN" } });
+        } catch (reopenErr) {
+          this.logger.error(
+            `Auto-resolve: could not move ticket ${ticket.id} to OPEN after enqueue failure — ${reopenErr instanceof Error ? reopenErr.message : reopenErr}`,
+          );
+        }
+      }
+
       return { ticket, created: true };
     } catch (err) {
       // P2002 (unique violation) on messageId under a concurrent retry race:
@@ -148,7 +183,11 @@ export class TicketsService {
             ],
           }
         : {}),
-      ...(status ? { status } : {}),
+      // No explicit status filter → hide the AI auto-resolution pipeline states
+      // (NEW / PROCESSING) so the inbox only shows tickets that need a human. An
+      // explicit status selection — incl. New/Processing for oversight — is
+      // always honored over this default exclusion.
+      ...(status ? { status } : { status: { notIn: HIDDEN_FROM_DEFAULT_LIST } }),
       ...(category ? { category } : {}),
       ...(priority ? { priority } : {}),
       ...(assigneeId ? { assigneeId } : {}),

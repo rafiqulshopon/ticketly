@@ -53,6 +53,8 @@ type BadgeVariant = ComponentProps<typeof Badge>["variant"];
 // status/priority to be listed, so adding a new variant is a type error until
 // it's mapped (stronger than a switch, which silently misses cases).
 export const STATUS_BADGES: Record<TicketListItem["status"], { label: string; variant: BadgeVariant }> = {
+  NEW: { label: "New", variant: "secondary" },
+  PROCESSING: { label: "Processing", variant: "secondary" },
   OPEN: { label: "Open", variant: "default" },
   AWAITING_STUDENT: { label: "Awaiting", variant: "secondary" },
   RESOLVED: { label: "Resolved", variant: "outline" },
