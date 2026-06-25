@@ -150,7 +150,7 @@ export class AiService {
       "ESCALATION — never auto-resolve (autoResolve=false, even if the KB seems to answer) when the customer: threatens legal action; requests a refund outside the 14-day money-back window; disputes a charge or mentions a chargeback; raises account security, data loss, or a suspected breach; or is clearly upset and needs a human.",
       "When in any doubt at all, do not auto-resolve — leave the ticket for a human.",
       "confidence: 'high' only when you are certain the KB fully answers it and no escalation applies; otherwise 'medium' or 'low'.",
-      "reply: when autoResolve=true, the customer-facing answer grounded STRICTLY in the knowledge base — friendly, concise, addressed to the customer, and never inventing policies, dates, amounts, or steps not in the KB. When autoResolve=false, reply MUST be an empty string.",
+      "reply: when autoResolve=true, the answer body grounded STRICTLY in the knowledge base — professional, warm, and customer-friendly, never inventing policies, dates, amounts, or steps not in the KB. Format it clearly: a short opening line, then concise steps or a short bulleted list where helpful (use '- ' bullets), with blank lines between paragraphs. Do NOT include a greeting/salutation or a sign-off — those are added automatically. When autoResolve=false, reply MUST be an empty string.",
       "reasoning: one short sentence explaining the decision.",
       "Reply in the same language the customer wrote in.",
       'Respond with ONLY a single JSON object and nothing else — no markdown, no code fences, no prose. Use exactly this shape:',
@@ -175,7 +175,18 @@ export class AiService {
       ].join("\n"),
     });
 
-    return parseAutoResolveDecision(text);
+    const decision = parseAutoResolveDecision(text);
+    // Wrap the answer as a first reply — greet the customer by first name and
+    // sign off as the support team (the same envelope `polishReply` applies to a
+    // first agent reply). Auto-resolve is always the first reply on a brand-new
+    // ticket, and the model is told not to add its own greeting/sign-off.
+    if (decision.autoResolve && decision.confidence === "high") {
+      return {
+        ...decision,
+        reply: `${this.autoResolveGreeting(input.requesterName)}${decision.reply.trim()}${this.autoResolveSignature()}`,
+      };
+    }
+    return decision;
   }
 
   /**
@@ -276,6 +287,29 @@ export class AiService {
     const name = agentName.trim();
     const lines = ["", "", "Best regards,", ...(name ? [name] : []), "Ticketly"];
     return lines.join("\n");
+  }
+
+  /** First name (first whitespace-separated token) of a full name, falling back
+   *  to "there" when empty so the greeting is always well-formed. The auto-resolve
+   *  reply greets the customer by first name, unlike `greeting()` which uses the
+   *  full name. */
+  private firstName(fullName: string): string {
+    const first = fullName.trim().split(/\s+/)[0] ?? "";
+    return first || "there";
+  }
+
+  /** Greeting prepended to an auto-resolved reply — the customer's first name, in
+   *  the same style as `greeting()`. The model is told not to add its own, so it
+   *  never duplicates. */
+  private autoResolveGreeting(requesterName: string): string {
+    return `Hello ${this.firstName(requesterName)},\n\n`;
+  }
+
+  /** Sign-off appended to an auto-resolved reply — no human agent authored it, so
+   *  it's signed as the support team rather than a named agent (same style as
+   *  `signature()` but without a separate name line). */
+  private autoResolveSignature(): string {
+    return "\n\nBest regards,\nThe Ticketly Support Team";
   }
 
   /** Compact role-labelled transcript of the last few messages for the prompt. */
