@@ -6,10 +6,13 @@ import { TicketsService } from "../../tickets/tickets.service";
 
 /**
  * Provider-agnostic inbound-email webhook. A trusted system POSTs the same
- * normalized shape as the manual create endpoint (plus an optional `messageId`
- * for idempotency); we verify the shared-secret token and create a ticket via
- * TicketsService. A future email provider (SendGrid, Mailgun, …) is wired by
- * adapting its payload into this JSON contract — no provider code lives here.
+ * normalized shape as the manual create endpoint, plus RFC822 threading fields:
+ * `messageId` (idempotency) and optional `inReplyTo` / `references` (so a reply
+ * appends to its thread instead of creating a duplicate). We verify the
+ * shared-secret token and ingest the email via TicketsService.ingestInbound,
+ * which decides new-ticket vs. appended-reply. A provider (SendGrid, Mailgun, …)
+ * is wired by adapting its payload into this JSON contract — no provider code
+ * lives here.
  *
  * The route is @AllowAnonymous (the caller has no session); the X-Webhook-Token
  * header, constant-time-compared to INBOUND_EMAIL_WEBHOOK_TOKEN, IS the access
@@ -17,6 +20,11 @@ import { TicketsService } from "../../tickets/tickets.service";
  */
 export const inboundEmailSchema = createTicketSchema.extend({
   messageId: z.string().min(1).max(512, "Message ID is too long").optional(),
+  inReplyTo: z.string().min(1).max(512, "In-Reply-To is too long").optional(),
+  references: z
+    .array(z.string().min(1).max(512))
+    .max(20, "Too many references")
+    .optional(),
 });
 export type InboundEmailInput = z.infer<typeof inboundEmailSchema>;
 
@@ -27,11 +35,10 @@ export class InboundMailService {
   async handle(
     token: string | undefined,
     input: InboundEmailInput,
-  ): Promise<{ id: number; created: boolean }> {
+  ): Promise<{ id: number; created: boolean; appended: boolean }> {
     this.verifyToken(token);
-    const { messageId, ...ticketInput } = input;
-    const { ticket, created } = await this.tickets.create(ticketInput, { messageId });
-    return { id: ticket.id, created };
+    const { ticketId, created, appended } = await this.tickets.ingestInbound(input);
+    return { id: ticketId, created, appended };
   }
 
   private verifyToken(token: string | undefined): void {

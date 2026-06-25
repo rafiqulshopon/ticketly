@@ -38,6 +38,23 @@ import { SYSTEM_AGENT_EMAIL } from "./tickets.constants";
  */
 export const SUPPORT_INBOUND_ADDRESS = "support@ticketly.local";
 
+/**
+ * One parsed inbound email handed to the email→ticket webhook. Extends the
+ * manual create shape with RFC822 threading fields: `messageId` (idempotent
+ * dedupe), and `inReplyTo` / `references` (to detect replies and append them to
+ * an existing ticket instead of creating a duplicate). Defined here (not in
+ * shared) so inbound-mail.service can pass its validated payload straight through.
+ */
+export type IngestInboundInput = CreateTicketInput & {
+  messageId?: string | null;
+  inReplyTo?: string | null;
+  references?: string[] | null;
+};
+
+/** Outcome of ingesting one inbound email — exactly one of created/appended means
+ *  a row was written; both false means it was a duplicate redelivery. */
+export type IngestResult = { ticketId: number; created: boolean; appended: boolean };
+
 /** Statuses the AI auto-resolution pipeline owns (NEW = just arrived,
  *  PROCESSING = AI is attempting to resolve). Hidden from the default ticket
  *  list so the inbox shows only tickets that need a human; an explicit status
@@ -174,6 +191,105 @@ export class TicketsService {
       }
       throw err;
     }
+  }
+
+  /**
+   * Inbound-email ingestion — the entry point for the email→ticket webhook. For
+   * one parsed inbound email it decides whether the message is:
+   *
+   *   - a DUPLICATE of an already-stored message (same RFC822 Message-ID) → no-op;
+   *   - a REPLY in an existing thread (its In-Reply-To / References matches a
+   *     Message-ID already on a ticket owned by the SAME requester) → append a new
+   *     inbound Message to that ticket;
+   *   - otherwise → a NEW ticket, delegated to create() (which enqueues the AI
+   *     classify + auto-resolve jobs).
+   *
+   * Threading is gated on requesterEmail equality, so a forged In-Reply-To can't
+   * inject a message into someone else's ticket — a mismatched requester falls
+   * through to a new ticket. Append does NOT change ticket status or re-run AI
+   * (reopen / re-classify are separate follow-ups). Idempotency is on
+   * Message.messageId (unique), which covers both the originating message
+   * create() wrote and any appended reply, so a SendGrid retry is always a no-op;
+   * the append path additionally reconciles the unique-constraint race under
+   * concurrent retries by treating P2002 as "already appended".
+   */
+  async ingestInbound(input: IngestInboundInput): Promise<IngestResult> {
+    const messageId = input.messageId ?? null;
+
+    // 1. Idempotency: this exact message was already ingested (original or reply).
+    if (messageId) {
+      const existing = await this.prisma.message.findUnique({
+        where: { messageId },
+        select: { ticketId: true },
+      });
+      if (existing) return { ticketId: existing.ticketId, created: false, appended: false };
+    }
+
+    // 2. Threading lookup — match In-Reply-To, then each Reference, against any
+    //    Message-ID on an existing message (a follow-up in the thread) or the
+    //    ticket's own originating Message-ID. Dedupe + keep In-Reply-To first.
+    const candidateIds = [
+      input.inReplyTo,
+      ...(input.references ?? []),
+    ].filter((v): v is string => typeof v === "string" && v.length > 0);
+    const uniqueCandidateIds = [...new Set(candidateIds)];
+    let parent: { id: number; requesterEmail: string } | null = null;
+    if (uniqueCandidateIds.length > 0) {
+      const replyTarget = await this.prisma.message.findFirst({
+        where: { messageId: { in: uniqueCandidateIds } },
+        orderBy: { createdAt: "desc" },
+        select: { ticket: { select: { id: true, requesterEmail: true } } },
+      });
+      parent = replyTarget?.ticket ?? null;
+      if (!parent) {
+        parent = await this.prisma.ticket.findFirst({
+          where: { messageId: { in: uniqueCandidateIds } },
+          orderBy: { createdAt: "desc" },
+          select: { id: true, requesterEmail: true },
+        });
+      }
+    }
+
+    // 3. Append to the thread iff the reply is from the ticket's own requester.
+    if (parent && parent.requesterEmail === input.requesterEmail) {
+      try {
+        await this.prisma.message.create({
+          data: {
+            ticketId: parent.id,
+            direction: "inbound",
+            senderType: "customer",
+            fromEmail: input.requesterEmail,
+            toEmail: SUPPORT_INBOUND_ADDRESS,
+            subject: input.subject,
+            bodyText: input.bodyText,
+            bodyHtml: sanitizeEmailHtml(input.bodyHtml),
+            messageId,
+            inReplyTo: input.inReplyTo ?? null,
+          },
+        });
+      } catch (err) {
+        // Concurrent retry race: another worker appended this message first.
+        if (messageId && isUniqueViolation(err)) {
+          return { ticketId: parent.id, created: false, appended: false };
+        }
+        throw err;
+      }
+      return { ticketId: parent.id, created: false, appended: true };
+    }
+
+    // 4. New ticket — create() handles Ticket.messageId idempotency + AI enqueue.
+    const { ticket } = await this.create(
+      {
+        subject: input.subject,
+        requesterEmail: input.requesterEmail,
+        requesterName: input.requesterName,
+        bodyText: input.bodyText,
+        bodyHtml: input.bodyHtml,
+        category: input.category,
+      },
+      { messageId },
+    );
+    return { ticketId: ticket.id, created: true, appended: false };
   }
 
   /**
