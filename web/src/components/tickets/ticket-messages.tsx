@@ -21,6 +21,9 @@ const MESSAGE_SENDER_TYPE: Record<
   agent: { label: "Agent", variant: "default" },
 };
 
+/** Distinct badge for the system AI agent's replies (vs a human "Agent"). */
+const AI_SENDER = { label: "AI Agent", variant: "outline" as BadgeVariant };
+
 /** Conversation thread for a ticket — the list of inbound/outbound messages. */
 export function TicketMessages({ messages }: { messages: TicketMessage[] }) {
   return (
@@ -44,16 +47,17 @@ export function TicketMessages({ messages }: { messages: TicketMessage[] }) {
 }
 
 function MessageItem({ message }: { message: TicketMessage }) {
-  const meta = MESSAGE_SENDER_TYPE[message.senderType];
+  const isAi = message.isAi;
+  const meta = isAi ? AI_SENDER : MESSAGE_SENDER_TYPE[message.senderType];
   const isAgent = message.senderType === "agent";
-  // Customer: the external author (fromEmail). Agent: the staff agent (senderName),
-  // replying to the requester (toEmail).
-  const author = isAgent ? (message.senderName ?? "Support team") : message.fromEmail;
+  // The "AI Agent" badge already identifies the author; for a human agent show the
+  // sender name, for a customer the external fromEmail.
+  const author = isAi ? null : isAgent ? (message.senderName ?? "Support team") : message.fromEmail;
   return (
     <div className={`flex flex-col gap-1 ${isAgent ? "items-end" : "items-start"}`}>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Badge variant={meta.variant}>{meta.label}</Badge>
-        <span className="font-medium text-foreground">{author}</span>
+        {author !== null && <span className="font-medium text-foreground">{author}</span>}
         {isAgent && <span>→ {message.toEmail}</span>}
       </div>
       <p

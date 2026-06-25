@@ -1,6 +1,8 @@
 import "dotenv/config";
+import { randomUUID } from "node:crypto";
 import { auth, prisma } from "../src/auth/auth.config";
 import { Role } from "../src/generated/prisma/client";
+import { SYSTEM_AGENT_EMAIL } from "../src/tickets/tickets.constants";
 
 /**
  * Seeds a bootstrap admin from env (SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD).
@@ -10,10 +12,12 @@ import { Role } from "../src/generated/prisma/client";
  * the role) and checks existence via Prisma directly.
  */
 async function main() {
+  await seedAiAgent();
+
   const email = process.env.SEED_ADMIN_EMAIL;
   const password = process.env.SEED_ADMIN_PASSWORD;
   if (!email || !password) {
-    console.warn("Seed: SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD not set — skipping.");
+    console.warn("Seed: SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD not set — skipping admin.");
     return;
   }
 
@@ -40,6 +44,21 @@ async function main() {
     body: { email, password, name: "Admin", role: Role.admin },
   });
   console.log(`Seed: created admin '${email}'.`);
+}
+
+/**
+ * Ensure the system "AI" agent exists — a bare `User` (no login credentials) that
+ * new tickets are assigned to and whose replies are attributed to it. Idempotent
+ * (upsert by email) and unconditional, unlike the admin which needs env vars.
+ * The `update` keeps the display name in sync on re-runs.
+ */
+async function seedAiAgent() {
+  const user = await prisma.user.upsert({
+    where: { email: SYSTEM_AGENT_EMAIL },
+    update: { name: "AI Agent" },
+    create: { id: randomUUID(), email: SYSTEM_AGENT_EMAIL, name: "AI Agent", role: Role.agent },
+  });
+  console.log(`Seed: ensured AI agent '${SYSTEM_AGENT_EMAIL}' (id ${user.id}).`);
 }
 
 main()

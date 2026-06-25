@@ -3,6 +3,7 @@ import type { Job } from "pg-boss";
 import type { TicketStatus } from "../generated/prisma/client";
 import { AiService } from "../ai/ai.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { SystemAgentService } from "../system-agent/system-agent.service";
 import {
   AUTO_RESOLVE_TICKET_QUEUE,
   type AutoResolveTicketJobData,
@@ -39,6 +40,7 @@ export class AutoResolveTicketConsumer implements OnApplicationBootstrap {
     private readonly queue: QueueService,
     private readonly ai: AiService,
     private readonly prisma: PrismaService,
+    private readonly systemAgent: SystemAgentService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -99,13 +101,15 @@ export class AutoResolveTicketConsumer implements OnApplicationBootstrap {
     }
 
     if (decision.autoResolve && decision.confidence === "high") {
+      // Attribute the reply to the system AI agent so the thread shows who answered.
+      const aiAgentId = await this.systemAgent.getAiAgentId();
       // Post the KB-grounded reply and resolve in one transaction. The transition
       // is conditional on PROCESSING so a mid-flight human edit isn't clobbered
       // (and no orphan reply is left behind if it is).
       await this.prisma.$transaction(async (tx) => {
         const updated = await tx.ticket.updateMany({
           where: { id: ticketId, status: "PROCESSING" },
-          data: { status: "RESOLVED" },
+          data: { status: "RESOLVED", resolvedAt: new Date() },
         });
         if (updated.count === 0) {
           this.logger.log(`Auto-resolve: ticket ${ticketId} left PROCESSING before resolve — skipping.`);
@@ -116,8 +120,8 @@ export class AutoResolveTicketConsumer implements OnApplicationBootstrap {
             ticketId,
             direction: "outbound",
             senderType: "agent",
-            // No human author (`senderId: null`) marks this as an AI-generated reply.
-            senderId: null,
+            // Authored by the system AI agent (null only if it isn't seeded yet).
+            senderId: aiAgentId,
             fromEmail: SUPPORT_INBOUND_ADDRESS,
             toEmail: ticket.requesterEmail,
             subject: `Re: ${ticket.subject}`,
@@ -136,11 +140,14 @@ export class AutoResolveTicketConsumer implements OnApplicationBootstrap {
     }
   }
 
-  /** Move a PROCESSING ticket to `status`, no-op if it was changed out from under us. */
+  /** Move a PROCESSING ticket to `status` and release it to the shared inbox by
+   *  unassigning the AI agent. No-op if the ticket was changed out from under us
+   *  (e.g. a human grabbed it mid-flight and changed its status). Only ever called
+   *  with OPEN. */
   private async transition(ticketId: number, status: Exclude<TicketStatus, "PROCESSING">): Promise<void> {
     const updated = await this.prisma.ticket.updateMany({
       where: { id: ticketId, status: "PROCESSING" },
-      data: { status },
+      data: { status, assigneeId: null },
     });
     if (updated.count === 0) {
       this.logger.log(`Auto-resolve: ticket ${ticketId} left PROCESSING — not forcing ${status}.`);

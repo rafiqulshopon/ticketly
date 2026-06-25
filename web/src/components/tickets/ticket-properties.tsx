@@ -7,7 +7,7 @@ import { PRIORITY_BADGES, STATUS_BADGES, prettifyEnum } from "@/components/ticke
 
 const dateFmt = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
-  timeStyle: "short",
+  timeStyle: "medium",
 });
 
 // Select options derived from the existing badge map / enum — no re-hardcoded

@@ -4,7 +4,7 @@ import { useSession } from "@/lib/auth";
 /**
  * Layout route that gates pages behind an **admin** session. Nest it inside
  * RequireAuth (which already redirects unauthenticated users to /login).
- * Authenticated non-admins are bounced to / rather than shown a 403.
+ * Authenticated non-admins are bounced to /tickets rather than shown a 403.
  */
 export function RequireAdmin() {
   const { data: session, isPending } = useSession();
@@ -18,7 +18,7 @@ export function RequireAdmin() {
   }
 
   if (session?.user?.role !== "admin") {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/tickets" replace />;
   }
 
   return <Outlet />;

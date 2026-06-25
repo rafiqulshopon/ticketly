@@ -3,6 +3,7 @@ import type {
   AssigneeOption,
   CreateReplyInput,
   CreateUserInput,
+  DashboardStats,
   EditUserInput,
   PolishReplyInput,
   PolishReplyResult,
@@ -146,6 +147,12 @@ export async function getTickets(
  *  navigating away. */
 export async function getTicket(id: number, config?: AxiosRequestConfig): Promise<TicketDetail> {
   return api<TicketDetail>(`/tickets/${encodeURIComponent(id)}`, config);
+}
+
+/** Dashboard metrics (admin only). Throws `ApiError(status)` (403 for non-admins)
+ *  on failure. Pass an AbortSignal so the caller can cancel when navigating away. */
+export async function getDashboardStats(config?: AxiosRequestConfig): Promise<DashboardStats> {
+  return api<DashboardStats>("/dashboard/stats", config);
 }
 
 /** Staff available for assignment (admins + agents). Lightweight — id/name/role

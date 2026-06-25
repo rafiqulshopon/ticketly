@@ -17,6 +17,7 @@ import type { Ticket as TicketRow, TicketStatus } from "../generated/prisma/clie
 import { AiService } from "../ai/ai.service";
 import { sanitizeEmailHtml } from "../common/sanitize-html";
 import { PrismaService } from "../prisma/prisma.service";
+import { SystemAgentService } from "../system-agent/system-agent.service";
 import {
   AUTO_RESOLVE_TICKET_QUEUE,
   AUTO_RESOLVE_TICKET_SEND_OPTIONS,
@@ -26,6 +27,7 @@ import {
   type ClassifyTicketJobData,
 } from "../queue/queue.constants";
 import { QueueService } from "../queue/queue.service";
+import { SYSTEM_AGENT_EMAIL } from "./tickets.constants";
 
 /**
  * Placeholder destination for the first inbound message on a ticket. There is no
@@ -61,6 +63,7 @@ export class TicketsService {
     private readonly prisma: PrismaService,
     private readonly ai: AiService,
     private readonly queue: QueueService,
+    private readonly systemAgent: SystemAgentService,
   ) {}
 
   async create(
@@ -75,6 +78,10 @@ export class TicketsService {
       if (existing) return { ticket: existing, created: false };
     }
 
+    // Assign to the AI system agent while the auto-resolver works the ticket. Null
+    // (unassigned) if it isn't seeded yet — never block ticket creation on this.
+    const aiAgentId = await this.systemAgent.getAiAgentId();
+
     try {
       const ticket = await this.prisma.$transaction(async (tx) => {
         const created = await tx.ticket.create({
@@ -85,6 +92,7 @@ export class TicketsService {
             // status/priority use the schema defaults (NEW / NORMAL). category has
             // no default — store null when omitted (assigned later by AI classify).
             category: input.category ?? null,
+            assigneeId: aiAgentId,
             messageId,
           },
         });
@@ -145,7 +153,10 @@ export class TicketsService {
           `Auto-resolve: enqueue failed for ticket ${ticket.id}, moving it to OPEN — ${err instanceof Error ? err.message : err}`,
         );
         try {
-          await this.prisma.ticket.update({ where: { id: ticket.id }, data: { status: "OPEN" } });
+          await this.prisma.ticket.update({
+            where: { id: ticket.id },
+            data: { status: "OPEN", assigneeId: null },
+          });
         } catch (reopenErr) {
           this.logger.error(
             `Auto-resolve: could not move ticket ${ticket.id} to OPEN after enqueue failure — ${reopenErr instanceof Error ? reopenErr.message : reopenErr}`,
@@ -235,6 +246,7 @@ export class TicketsService {
       },
     });
     if (!ticket) throw new NotFoundException("Ticket not found");
+    const aiAgentId = await this.systemAgent.getAiAgentId();
     return {
       id: ticket.id,
       subject: ticket.subject,
@@ -255,6 +267,11 @@ export class TicketsService {
         fromEmail: m.fromEmail,
         toEmail: m.toEmail,
         senderName: m.sender ? m.sender.name : null,
+        // Authored by the system AI agent — either attributed now (senderId === the
+        // AI user) or a legacy reply from before attribution (agent msg, no sender).
+        isAi:
+          (aiAgentId !== null && m.senderId === aiAgentId) ||
+          (m.senderType === "agent" && m.senderId === null),
         bodyText: m.bodyText,
         createdAt: m.createdAt.toISOString(),
       })),
@@ -386,6 +403,9 @@ export class TicketsService {
       ...(input.status !== undefined ? { status: input.status } : {}),
       ...(input.category !== undefined ? { category: input.category } : {}),
       ...(input.priority !== undefined ? { priority: input.priority } : {}),
+      // Stamp the resolution time when a ticket is first resolved/closed, powering
+      // the dashboard's average-resolution-time metric (null until then).
+      ...(input.status === "RESOLVED" || input.status === "CLOSED" ? { resolvedAt: new Date() } : {}),
     };
 
     await this.prisma.ticket.update({ where: { id }, data });
@@ -399,7 +419,8 @@ export class TicketsService {
    */
   async listAssignees(): Promise<AssigneeOption[]> {
     const users = await this.prisma.user.findMany({
-      where: { deletedAt: null },
+      // Exclude the AI system agent — humans shouldn't manually assign to it.
+      where: { deletedAt: null, email: { not: SYSTEM_AGENT_EMAIL } },
       select: { id: true, name: true, role: true },
       orderBy: { name: "asc" },
     });

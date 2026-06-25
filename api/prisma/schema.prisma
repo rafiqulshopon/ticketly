@@ -130,6 +130,7 @@ model Ticket {
   drafts         Draft[]
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
+  resolvedAt     DateTime? // Set when status first reaches RESOLVED/CLOSED; null until then.
 
   @@index([status])
   @@index([assigneeId])

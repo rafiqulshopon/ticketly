@@ -23,9 +23,11 @@ export function AppLayout() {
             Ticketly
           </Link>
           <nav className="flex items-center gap-4 text-sm text-muted-foreground">
-            <Link to="/" className="hover:text-foreground">
-              Dashboard
-            </Link>
+            {session?.user?.role === "admin" && (
+              <Link to="/dashboard" className="hover:text-foreground">
+                Dashboard
+              </Link>
+            )}
             <Link to="/tickets" className="hover:text-foreground">
               Tickets
             </Link>

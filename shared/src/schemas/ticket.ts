@@ -181,8 +181,9 @@ export const messageSenderTypeEnum = z.enum(["agent", "customer"]);
 /** A single message in a ticket's conversation thread. `senderName` is the
  *  staff agent for outbound replies (resolved from the `sender` relation) and
  *  null for inbound messages, where the author is the external `fromEmail`.
- *  Only `bodyText` is surfaced — `bodyHtml` is untrusted email HTML and is
- *  omitted to avoid XSS. Timestamps are ISO strings. */
+ *  `isAi` flags a reply authored by the system AI agent (vs a human). Only
+ *  `bodyText` is surfaced — `bodyHtml` is untrusted email HTML and is omitted to
+ *  avoid XSS. Timestamps are ISO strings. */
 export const ticketMessageSchema = z.object({
   id: z.string(),
   direction: messageDirectionEnum,
@@ -190,6 +191,7 @@ export const ticketMessageSchema = z.object({
   fromEmail: z.string(),
   toEmail: z.string(),
   senderName: z.string().nullable(),
+  isAi: z.boolean().default(false),
   bodyText: z.string(),
   createdAt: z.string(),
 });

@@ -2,6 +2,7 @@ import { Routes, Route } from "react-router-dom";
 import { AppLayout } from "@/components/layout/app-layout";
 import { RequireAuth } from "@/components/auth/require-auth";
 import { RequireAdmin } from "@/components/auth/require-admin";
+import { RoleRedirect } from "@/components/auth/role-redirect";
 import { DashboardPage } from "@/routes/dashboard";
 import { TicketsPage } from "@/routes/tickets";
 import { TicketDetailsPage } from "@/routes/ticket-details";
@@ -16,12 +17,14 @@ export default function App() {
       {/* Authenticated routes: guarded shell + outlet. */}
       <Route element={<RequireAuth />}>
         <Route element={<AppLayout />}>
-          <Route path="/" element={<DashboardPage />} />
+          {/* Role-aware landing: admin → /dashboard, agent → /tickets. */}
+          <Route path="/" element={<RoleRedirect />} />
           {/* All staff (admin + agent). */}
           <Route path="/tickets" element={<TicketsPage />} />
           <Route path="/tickets/:id" element={<TicketDetailsPage />} />
           {/* Admin-only routes. */}
           <Route element={<RequireAdmin />}>
+            <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/users" element={<UsersPage />} />
           </Route>
         </Route>
