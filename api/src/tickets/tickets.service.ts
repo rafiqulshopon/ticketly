@@ -15,6 +15,7 @@ import type {
 } from "@ticketly/shared";
 import type { Ticket as TicketRow, TicketStatus } from "../generated/prisma/client";
 import { AiService } from "../ai/ai.service";
+import { OutboundMailService } from "../channels/email/outbound-mail.service";
 import { sanitizeEmailHtml } from "../common/sanitize-html";
 import { PrismaService } from "../prisma/prisma.service";
 import { SystemAgentService } from "../system-agent/system-agent.service";
@@ -81,6 +82,7 @@ export class TicketsService {
     private readonly ai: AiService,
     private readonly queue: QueueService,
     private readonly systemAgent: SystemAgentService,
+    private readonly mail: OutboundMailService,
   ) {}
 
   async create(
@@ -408,10 +410,14 @@ export class TicketsService {
    * replied, now waiting on the requester); RESOLVED/CLOSED tickets are left
    * untouched — no silent reopen. Both writes happen in one transaction.
    *
-   * There is no outbound mail provider wired yet, so nothing is actually emailed
-   * — the reply lives in-thread only (visible via findOne). Throws
-   * NotFoundException (404) for an unknown ticket. Unscoped (shared inbox),
-   * matching list()/findOne().
+   * After the in-thread reply is persisted, it is emailed to the requester via
+   * SendGrid (OutboundMailService) — best-effort: a SendGrid failure is logged
+   * but never rolls back the persisted reply or fails this request, so the
+   * agent's work survives a transient mail outage. The send carries a
+   * client-generated Message-ID (+ In-Reply-To/References to the originating
+   * inbound Message-ID), persisted here so a customer reply threads back onto
+   * this ticket via the inbound webhook. Throws NotFoundException (404) for an
+   * unknown ticket. Unscoped (shared inbox), matching list()/findOne().
    */
   async reply(ticketId: number, input: CreateReplyInput, senderId: string): Promise<TicketDetail> {
     const ticket = await this.prisma.ticket.findUnique({
@@ -421,6 +427,11 @@ export class TicketsService {
     if (!ticket) throw new NotFoundException("Ticket not found");
 
     const nextStatus = ticket.status === "OPEN" ? "AWAITING_STUDENT" : undefined;
+    // Generated up-front so the same Message-ID is both emailed (SendGrid honors
+    // a sender-supplied Message-ID) and persisted — a customer reply threads back
+    // here via the inbound webhook's Message.messageId lookup.
+    const messageId = this.mail.generateMessageId();
+    const from = this.mail.fromAddress();
 
     await this.prisma.$transaction(async (tx) => {
       await tx.message.create({
@@ -428,18 +439,33 @@ export class TicketsService {
           ticketId: ticket.id,
           direction: "outbound",
           senderType: "agent",
-          fromEmail: SUPPORT_INBOUND_ADDRESS,
+          fromEmail: from,
           toEmail: ticket.requesterEmail,
           subject: `Re: ${ticket.subject}`,
           bodyText: input.bodyText,
           bodyHtml: null,
           senderId,
+          messageId,
           inReplyTo: ticket.messageId ?? null,
         },
       });
       if (nextStatus) {
         await tx.ticket.update({ where: { id: ticket.id }, data: { status: nextStatus } });
       }
+    });
+
+    // Best-effort outbound email — never throws; the in-thread reply is already
+    // persisted, so a SendGrid outage degrades to "reply saved, email not sent"
+    // (logged) rather than failing the agent's request.
+    await this.mail.sendReply({
+      to: ticket.requesterEmail,
+      from,
+      fromName: this.mail.fromName(),
+      subject: `Re: ${ticket.subject}`,
+      text: input.bodyText,
+      messageId,
+      inReplyTo: ticket.messageId ?? undefined,
+      references: ticket.messageId ?? undefined,
     });
 
     return this.findOne(ticketId);

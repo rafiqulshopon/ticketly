@@ -2,6 +2,7 @@ import { Injectable, Logger, type OnApplicationBootstrap } from "@nestjs/common"
 import type { Job } from "pg-boss";
 import type { TicketStatus } from "../generated/prisma/client";
 import { AiService } from "../ai/ai.service";
+import { OutboundMailService } from "../channels/email/outbound-mail.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { SystemAgentService } from "../system-agent/system-agent.service";
 import {
@@ -9,7 +10,6 @@ import {
   type AutoResolveTicketJobData,
 } from "../queue/queue.constants";
 import { QueueService } from "../queue/queue.service";
-import { SUPPORT_INBOUND_ADDRESS } from "./tickets.service";
 
 /**
  * Consumes the {@link AUTO_RESOLVE_TICKET_QUEUE} and drives the AI auto-resolution
@@ -41,6 +41,7 @@ export class AutoResolveTicketConsumer implements OnApplicationBootstrap {
     private readonly ai: AiService,
     private readonly prisma: PrismaService,
     private readonly systemAgent: SystemAgentService,
+    private readonly mail: OutboundMailService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -103,9 +104,15 @@ export class AutoResolveTicketConsumer implements OnApplicationBootstrap {
     if (decision.autoResolve && decision.confidence === "high") {
       // Attribute the reply to the system AI agent so the thread shows who answered.
       const aiAgentId = await this.systemAgent.getAiAgentId();
+      // Generated up-front: emailed (SendGrid honors a sender-supplied
+      // Message-ID) and persisted on the outbound Message so the customer's reply
+      // threads back here via the inbound webhook.
+      const messageId = this.mail.generateMessageId();
+      const from = this.mail.fromAddress();
       // Post the KB-grounded reply and resolve in one transaction. The transition
       // is conditional on PROCESSING so a mid-flight human edit isn't clobbered
       // (and no orphan reply is left behind if it is).
+      let replied = false;
       await this.prisma.$transaction(async (tx) => {
         const updated = await tx.ticket.updateMany({
           where: { id: ticketId, status: "PROCESSING" },
@@ -122,16 +129,33 @@ export class AutoResolveTicketConsumer implements OnApplicationBootstrap {
             senderType: "agent",
             // Authored by the system AI agent (null only if it isn't seeded yet).
             senderId: aiAgentId,
-            fromEmail: SUPPORT_INBOUND_ADDRESS,
+            fromEmail: from,
             toEmail: ticket.requesterEmail,
             subject: `Re: ${ticket.subject}`,
             bodyText: decision.reply,
             bodyHtml: null,
+            messageId,
             inReplyTo: ticket.messageId ?? null,
           },
         });
+        replied = true;
       });
-      this.logger.log(`Auto-resolve: ticket ${ticketId} resolved via knowledge base.`);
+      if (replied) {
+        this.logger.log(`Auto-resolve: ticket ${ticketId} resolved via knowledge base.`);
+        // Best-effort outbound email — never throws; the resolve + reply are
+        // already committed, so a SendGrid outage logs rather than retrying the
+        // whole job (which would re-run the LLM and risk a duplicate reply).
+        await this.mail.sendReply({
+          to: ticket.requesterEmail,
+          from,
+          fromName: this.mail.fromName(),
+          subject: `Re: ${ticket.subject}`,
+          text: decision.reply,
+          messageId,
+          inReplyTo: ticket.messageId ?? undefined,
+          references: ticket.messageId ?? undefined,
+        });
+      }
     } else {
       await this.transition(ticketId, "OPEN");
       this.logger.log(
