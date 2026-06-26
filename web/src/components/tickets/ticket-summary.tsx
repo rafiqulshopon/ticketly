@@ -4,6 +4,7 @@ import { Loader2, Sparkles } from "lucide-react";
 import type { TicketDetail } from "@ticketly/shared";
 import { ApiError, summarizeTicket } from "@/lib/api";
 import { renderInlineMarkdown } from "@/lib/markdown";
+import { cn } from "@/lib/utils";
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
 
 /** Map a failed summarize mutation to a user-facing message. */
@@ -23,7 +24,7 @@ function toSummaryErrorMessage(err: unknown): string {
  * (matching the backend, which never stores it). The result lives in local
  * state, not the TanStack Query cache: it's a transient aid, not part of the
  * ticket record, so it shouldn't survive a refetch or leak into the list. Errors
- * render inline — no toasts anywhere in the app.
+ * render inline.
  */
 export function TicketSummary({ ticket }: { ticket: TicketDetail }) {
   const [summary, setSummary] = useState<string | null>(null);
@@ -43,9 +44,19 @@ export function TicketSummary({ ticket }: { ticket: TicketDetail }) {
   }
 
   return (
-    <Card>
+    <Card className="border-ai/20 bg-ai/4">
       <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-base font-semibold">AI summary</CardTitle>
+        <CardTitle className="flex items-center gap-2 text-base font-semibold">
+          <span
+            className={cn(
+              "flex size-7 items-center justify-center rounded-md bg-ai/10 text-ai",
+              mutation.isPending && "animate-ai-pulse",
+            )}
+          >
+            <Sparkles className="size-4" />
+          </span>
+          AI summary
+        </CardTitle>
         <Button
           type="button"
           variant="outline"

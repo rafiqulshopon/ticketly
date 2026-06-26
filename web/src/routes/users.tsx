@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { UserListItem } from "@ticketly/shared";
 import { ApiError, getUsers } from "@/lib/api";
+import { Search } from "lucide-react";
 import { Button, Input } from "@/components/ui";
 import { DeleteUserDialog } from "@/components/users/delete-user-dialog";
 import { UserFormDialog } from "@/components/users/user-form-dialog";
@@ -45,24 +46,32 @@ export function UsersPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage admin and agent accounts. Visible to administrators only.
-          </p>
+          <p className="text-sm text-muted-foreground">Admin and agent accounts.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {data ? (
+            <span className="hidden text-sm text-muted-foreground sm:block">
+              {data.total} {data.total === 1 ? "user" : "users"}
+            </span>
+          ) : null}
           <Button onClick={() => setCreateOpen(true)}>Create user</Button>
-          <div className="w-full sm:w-72">
-            <Input
-              type="search"
-              placeholder="Search by name or email…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              aria-label="Search users"
-            />
-          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-2">
+        <div className="relative w-full sm:w-72">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            placeholder="Search by name or email…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            aria-label="Search users"
+            className="pl-9"
+          />
         </div>
       </div>
 

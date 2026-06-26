@@ -15,6 +15,13 @@ const badgeVariants = cva(
         outline: "border-border text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
         ghost: "[a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
         link: "text-primary underline-offset-4 [a&]:hover:underline",
+        // Soft semantic variants — tinted bg, accessible text shade, hairline
+        // border. Used for ticket status/priority so a queue reads at a glance.
+        success: "bg-success/10 text-success-fg border-success/20",
+        warning: "bg-warning/10 text-warning-fg border-warning/20",
+        info: "bg-info/10 text-info-fg border-info/20",
+        indigo: "bg-indigo/10 text-indigo-fg border-indigo/20",
+        danger: "bg-destructive/10 text-destructive border-destructive/20",
       },
     },
     defaultVariants: {

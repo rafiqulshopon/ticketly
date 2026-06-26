@@ -4,7 +4,11 @@ import { BrowserRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as Sentry from "@sentry/react";
 import App from "./App";
+// Fonts load before index.css so the cascade resolves typefaces first.
+import "@fontsource-variable/mona-sans";
+import "@fontsource-variable/geist-mono";
 import "./index.css";
+import { Toaster } from "@/components/ui/sonner";
 
 // Errors only — no performance tracing or session replay. With VITE_SENTRY_DSN
 // unset (local dev), `enabled` is false and the SDK makes no outbound calls.
@@ -44,6 +48,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <Sentry.ErrorBoundary fallback={<SentryFallback />}>
           <App />
         </Sentry.ErrorBoundary>
+        <Toaster />
       </BrowserRouter>
     </QueryClientProvider>
   </React.StrictMode>,

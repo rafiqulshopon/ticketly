@@ -61,9 +61,16 @@ export function TicketsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Tickets</h1>
-        <p className="text-sm text-muted-foreground">Support inbox, newest first.</p>
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Tickets</h1>
+          <p className="text-sm text-muted-foreground">Support requests, newest first.</p>
+        </div>
+        {data ? (
+          <span className="hidden text-sm text-muted-foreground sm:block">
+            {data.total} {data.total === 1 ? "ticket" : "tickets"}
+          </span>
+        ) : null}
       </div>
 
       <TicketFilters

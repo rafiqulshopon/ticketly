@@ -4,53 +4,109 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Ticketly — "Signal" design system.
+ *
+ * One brand decision: emerald is reserved for "the AI acted here" — summaries,
+ * polish, auto-resolve, the AI-resolution KPI, AI replies in the thread. Primary
+ * actions stay high-contrast ink; emerald is a signal, not a wash. Ticket states
+ * get a small semantic palette (blue = new, indigo = processing, amber = waiting,
+ * emerald = resolved) so a triage queue is readable at a glance instead of a row
+ * of identical grey badges.
+ */
+
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chat-agent: oklch(0.546 0.215 262.881);
-  --chat-agent-foreground: oklch(0.985 0 0);
+  --background: #fbfcfd; /* cool paper */
+  --foreground: #0b1220; /* ink */
+  --card: #ffffff;
+  --card-foreground: #0b1220;
+  --popover: #ffffff;
+  --popover-foreground: #0b1220;
+  --primary: #0b1220; /* ink — primary actions */
+  --primary-foreground: #ffffff;
+  --secondary: #f1f4f8; /* cool light surface */
+  --secondary-foreground: #0b1220;
+  --muted: #f1f4f8;
+  --muted-foreground: #5b6776;
+  --accent: #f1f4f8; /* ghost/outline hover surface (kept neutral) */
+  --accent-foreground: #0b1220;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #e5e9f0;
+  --input: #e5e9f0;
+  --ring: #94a3b8;
+
+  /* AI brand signal (emerald). Dark text on the bubble — white on #0e9f6e is
+   * only ~2.9:1, so AI replies use ink-on-emerald (a readable "highlight"). */
+  --ai: #0e9f6e;
+  --ai-foreground: #062c1d;
+  --ai-soft: #e8f7f0;
+  --ai-soft-foreground: #066c49;
+
+  /* Semantic ticket-state palette. */
+  --success: #0e9f6e;
+  --success-foreground: #ffffff;
+  --warning: #d97706;
+  --warning-foreground: #ffffff;
+  --info: #2563eb;
+  --info-foreground: #ffffff;
+  --indigo: #4f46e5;
+  --indigo-foreground: #ffffff;
+
+  /* Accessible text shades for soft tinted badges (deep on tint, AA). */
+  --success-fg: #065f46;
+  --warning-fg: #92400e;
+  --info-fg: #1d4ed8;
+  --indigo-fg: #4338ca;
+
   --radius: 0.625rem;
+
+  --font-sans: "Mona Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, Monaco,
+    Consolas, monospace;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chat-agent: oklch(0.623 0.214 259.815);
-  --chat-agent-foreground: oklch(0.985 0 0);
+  --background: #0b1220;
+  --foreground: #e8edf6;
+  --card: #111a2c;
+  --card-foreground: #e8edf6;
+  --popover: #111a2c;
+  --popover-foreground: #e8edf6;
+  --primary: #e8edf6;
+  --primary-foreground: #0b1220;
+  --secondary: #1a2438;
+  --secondary-foreground: #e8edf6;
+  --muted: #1a2438;
+  --muted-foreground: #94a3b8;
+  --accent: #1a2438;
+  --accent-foreground: #e8edf6;
+  --destructive: #f87171;
+  --destructive-foreground: #0b1220;
+  --border: #1f2a40;
+  --input: #243049;
+  --ring: #64748b;
+
+  --ai: #34d399;
+  --ai-foreground: #04140d;
+  --ai-soft: rgba(52, 211, 153, 0.12);
+  --ai-soft-foreground: #6ee7b7;
+
+  --success: #34d399;
+  --success-foreground: #04140d;
+  --warning: #fbbf24;
+  --warning-foreground: #1a1300;
+  --info: #60a5fa;
+  --info-foreground: #04101f;
+  --indigo: #818cf8;
+  --indigo-foreground: #0a0f2b;
+
+  /* Soft-badge text shades flipped light for dark surfaces. */
+  --success-fg: #6ee7b7;
+  --warning-fg: #fcd34d;
+  --info-fg: #93c5fd;
+  --indigo-fg: #c7d2fe;
 }
 
 @theme inline {
@@ -73,20 +129,93 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --color-chat-agent: var(--chat-agent);
-  --color-chat-agent-foreground: var(--chat-agent-foreground);
+
+  --color-ai: var(--ai);
+  --color-ai-foreground: var(--ai-foreground);
+  --color-ai-soft: var(--ai-soft);
+  --color-ai-soft-foreground: var(--ai-soft-foreground);
+
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-indigo: var(--indigo);
+  --color-indigo-foreground: var(--indigo-foreground);
+
+  --color-success-fg: var(--success-fg);
+  --color-warning-fg: var(--warning-fg);
+  --color-info-fg: var(--info-fg);
+  --color-indigo-fg: var(--indigo-fg);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  --animate-ai-pulse: ai-pulse 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes ai-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--ai) 50%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 5px color-mix(in oklab, var(--ai) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--ai) 0%, transparent);
+  }
 }
 
 @layer base {
   * {
     border-color: var(--border);
   }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
   body {
     background-color: var(--background);
     color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  /* Numerals align in tables/KPIs; apply via .tabular or font-mono. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--ai) 22%, transparent);
+  }
+  /* Quiet, theme-aware scrollbars for the conversation thread and lists. */
+  .scroll-slim {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  .scroll-slim::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scroll-slim::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 9999px;
+  }
+}
+
+/* Respect users who prefer less motion: disable all AI/ambient animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

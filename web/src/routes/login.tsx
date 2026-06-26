@@ -3,6 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Navigate, useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { signIn, useSession } from "@/lib/auth";
+import { LogoMark } from "@/components/brand/logo";
 import {
   Button,
   Card,
@@ -58,8 +59,12 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-sm">
+    <div className="flex min-h-screen items-center justify-center bg-secondary/40 px-4">
+      <div className="w-full max-w-sm">
+        <div className="mb-6 flex justify-center">
+          <LogoMark className="size-12" />
+        </div>
+        <Card className="shadow-sm">
         <CardHeader>
           <CardTitle className="text-2xl">Sign in</CardTitle>
           <CardDescription>Enter your credentials to access Ticketly.</CardDescription>
@@ -98,7 +103,8 @@ export function LoginPage() {
             </Button>
           </form>
         </CardContent>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }

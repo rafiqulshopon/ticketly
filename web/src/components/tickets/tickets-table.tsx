@@ -1,4 +1,4 @@
-import { type ComponentProps, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import {
   flexRender,
   getCoreRowModel,
@@ -9,10 +9,13 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Link } from "@/components/link";
 import type { TicketListItem, TicketListResponse } from "@ticketly/shared";
 import { ApiError } from "@/lib/api";
 import {
+  Avatar,
+  AvatarFallback,
   Badge,
   Button,
   Card,
@@ -24,6 +27,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui";
+import { PRIORITY_BADGES, STATUS_BADGES, prettifyEnum } from "@/components/tickets/ticket-badges";
+
+/** Up-to-two-letter initials for an avatar fallback. */
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).slice(0, 2);
+  return parts.map((p) => p[0]?.toUpperCase() ?? "").join("") || "?";
+}
 
 const dateFmt = new Intl.DateTimeFormat(undefined, {
   year: "numeric",
@@ -39,38 +49,10 @@ function toErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : "Failed to load tickets.";
 }
 
-/** GENERAL_QUESTION → "General question". */
-export function prettifyEnum(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/_/g, " ")
-    .replace(/^\w/, (c) => c.toUpperCase());
-}
-
-type BadgeVariant = ComponentProps<typeof Badge>["variant"];
-
-// Lookup maps keyed by the enum value: a `Record` over the union forces every
-// status/priority to be listed, so adding a new variant is a type error until
-// it's mapped (stronger than a switch, which silently misses cases).
-export const STATUS_BADGES: Record<TicketListItem["status"], { label: string; variant: BadgeVariant }> = {
-  NEW: { label: "New", variant: "secondary" },
-  PROCESSING: { label: "Processing", variant: "secondary" },
-  OPEN: { label: "Open", variant: "default" },
-  AWAITING_STUDENT: { label: "Awaiting", variant: "secondary" },
-  RESOLVED: { label: "Resolved", variant: "outline" },
-  CLOSED: { label: "Closed", variant: "secondary" },
-};
-
 function StatusBadge({ status }: { status: TicketListItem["status"] }) {
   const { label, variant } = STATUS_BADGES[status];
   return <Badge variant={variant}>{label}</Badge>;
 }
-
-export const PRIORITY_BADGES: Record<TicketListItem["priority"], { label: string; variant: BadgeVariant }> = {
-  HIGH: { label: "High", variant: "destructive" },
-  NORMAL: { label: "Normal", variant: "default" },
-  LOW: { label: "Low", variant: "secondary" },
-};
 
 function PriorityBadge({ priority }: { priority: TicketListItem["priority"] }) {
   const { label, variant } = PRIORITY_BADGES[priority];
@@ -129,7 +111,9 @@ const columns: ColumnDef<TicketListItem>[] = [
     id: "id",
     enableSorting: false,
     header: "ID",
-    cell: ({ row }) => <span className="text-muted-foreground">#{row.original.id}</span>,
+    cell: ({ row }) => (
+      <span className="font-mono text-xs text-muted-foreground">#{row.original.id}</span>
+    ),
   },
   {
     accessorKey: "subject",
@@ -144,9 +128,16 @@ const columns: ColumnDef<TicketListItem>[] = [
     accessorKey: "requesterName",
     header: ({ column }) => <SortHeader column={column}>Requester</SortHeader>,
     cell: ({ row }) => (
-      <div className="flex flex-col">
-        <span className="text-foreground">{row.original.requesterName}</span>
-        <span className="text-xs text-muted-foreground">{row.original.requesterEmail}</span>
+      <div className="flex items-center gap-2.5">
+        <Avatar className="size-7">
+          <AvatarFallback className="text-[10px]">
+            {initials(row.original.requesterName)}
+          </AvatarFallback>
+        </Avatar>
+        <div className="flex flex-col">
+          <span className="text-foreground">{row.original.requesterName}</span>
+          <span className="text-xs text-muted-foreground">{row.original.requesterEmail}</span>
+        </div>
       </div>
     ),
   },
@@ -222,6 +213,12 @@ export function TicketsTable({
   onRefetch,
   onPageChange,
 }: TicketsTableProps) {
+  // TanStack Table returns non-memoizable functions, so React Compiler skips
+  // this component by default. The directive makes that opt-out explicit
+  // (same behaviour, no warning) — the table is consumed locally via
+  // flexRender, never handed to a memoized child, so skipping is safe.
+  "use no memo";
+  const navigate = useNavigate();
   const table = useReactTable({
     data: data?.items ?? [],
     columns,
@@ -271,7 +268,11 @@ export function TicketsTable({
             </TableRow>
           ) : data && data.items.length > 0 ? (
             table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id}>
+              <TableRow
+                key={row.id}
+                className="cursor-pointer transition-colors hover:bg-secondary/50"
+                onClick={() => navigate(`/tickets/${row.original.id}`)}
+              >
                 {row.getVisibleCells().map((cell) => (
                   <TableCell key={cell.id} className={COLUMN_LAYOUT[cell.column.id] ?? ""}>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}

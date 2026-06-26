@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Wand2 } from "lucide-react";
 import { createReplySchema, type CreateReplyInput, type PolishReplyInput, type TicketDetail } from "@ticketly/shared";
 import { ApiError, polishReply, replyToTicket } from "@/lib/api";
-import { Button, Card, CardContent, CardHeader, CardTitle, Textarea } from "@/components/ui";
+import { Button, Card, CardContent, CardHeader, CardTitle, Textarea, toast } from "@/components/ui";
 
 // The form's only field is the reply body, so its values are exactly the shared
 // reply input — keeping the submit handler cast-free.
@@ -34,9 +34,9 @@ function toPolishErrorMessage(err: unknown): string {
  * Reply composer for a ticket. Submits a plain-text body that the backend stores
  * as an outbound (agent) message in the conversation thread. On success the
  * refreshed ticket is written straight into the `["ticket", id]` cache (so the
- * new message and any status bump render immediately) and the ticket list is
- * invalidated (status/updatedAt changed). On failure the form stays mounted with
- * an inline error — no toasts anywhere in the app.
+ * new message and any status bump render immediately), the ticket list is
+ * invalidated (status/updatedAt changed), and a toast confirms the send. On
+ * failure the form stays mounted with an inline error.
  */
 export function ReplyForm({ ticket }: { ticket: TicketDetail }) {
   const queryClient = useQueryClient();
@@ -71,6 +71,7 @@ export function ReplyForm({ ticket }: { ticket: TicketDetail }) {
       queryClient.setQueryData(["ticket", ticket.id], updated);
       queryClient.invalidateQueries({ queryKey: ["tickets"] });
       reset({ bodyText: "" });
+      toast.success("Reply sent.");
     } catch (err) {
       setError("root", { message: toErrorMessage(err) });
     }
@@ -88,6 +89,7 @@ export function ReplyForm({ ticket }: { ticket: TicketDetail }) {
     try {
       const { bodyText: polished } = await polish.mutateAsync({ bodyText: draft });
       setValue("bodyText", polished, { shouldValidate: true });
+      toast.success("Reply polished.");
     } catch (err) {
       setError("root", { message: toPolishErrorMessage(err) });
     }

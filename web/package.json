@@ -12,6 +12,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@fontsource-variable/geist-mono": "^5.2.8",
+    "@fontsource-variable/mona-sans": "^5.2.8",
     "@hookform/resolvers": "^5.4.0",
     "@radix-ui/react-slot": "^1.3.0",
     "@sentry/react": "^10.61.0",
@@ -29,6 +31,7 @@
     "react-hook-form": "^7.80.0",
     "react-router-dom": "^7.18.0",
     "recharts": "^3.9.0",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
     "zod": "^4.4.3"
   },

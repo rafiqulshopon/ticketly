@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Clock, Inbox, Sparkles, Ticket, Wand2 } from "lucide-react";
 import { ApiError, getDashboardStats } from "@/lib/api";
 import { Button, Card, CardContent, CardHeader, Skeleton } from "@/components/ui";
 import { StatCard } from "@/components/dashboard/stat-card";
@@ -53,15 +54,34 @@ export function DashboardPage() {
       ) : data ? (
         <div className="space-y-6">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <StatCard label="Total tickets" value={data.totalTickets.toLocaleString()} />
-            <StatCard label="Open tickets" value={data.openTickets.toLocaleString()} />
+            <StatCard
+              label="Total tickets"
+              value={data.totalTickets.toLocaleString()}
+              icon={<Ticket className="size-4" />}
+            />
+            <StatCard
+              label="Open tickets"
+              value={data.openTickets.toLocaleString()}
+              icon={<Inbox className="size-4" />}
+            />
             <StatCard
               label="Resolved by AI"
               value={data.resolvedByAi.toLocaleString()}
               description={`of ${data.totalResolved.toLocaleString()} resolved`}
+              icon={<Sparkles className="size-4" />}
+              tone="ai"
             />
-            <StatCard label="AI resolution rate" value={`${data.aiResolutionRate.toFixed(1)}%`} />
-            <StatCard label="Avg. resolution time" value={formatDuration(data.avgResolutionTimeMs)} />
+            <StatCard
+              label="AI resolution rate"
+              value={`${data.aiResolutionRate.toFixed(1)}%`}
+              icon={<Wand2 className="size-4" />}
+              tone="ai"
+            />
+            <StatCard
+              label="Avg. resolution time"
+              value={formatDuration(data.avgResolutionTimeMs)}
+              icon={<Clock className="size-4" />}
+            />
           </div>
           <TicketsPerDayChart data={data.ticketsPerDay} />
         </div>

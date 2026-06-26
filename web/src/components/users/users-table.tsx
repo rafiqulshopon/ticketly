@@ -2,6 +2,8 @@ import { Pencil, Trash2 } from "lucide-react";
 import type { UserListItem, UserListResponse } from "@ticketly/shared";
 import { ApiError } from "@/lib/api";
 import {
+  Avatar,
+  AvatarFallback,
   Badge,
   Button,
   Card,
@@ -13,6 +15,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui";
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).slice(0, 2);
+  return parts.map((p) => p[0]?.toUpperCase() ?? "").join("") || "?";
+}
 
 const dateFmt = new Intl.DateTimeFormat(undefined, {
   year: "numeric",
@@ -152,17 +159,24 @@ function UserRow({
   // the row's actions stay aligned and the intent is clear.
   const isAdmin = user.role === "admin";
   return (
-    <TableRow>
-      <TableCell className="pl-4 font-medium text-foreground">{user.name}</TableCell>
+    <TableRow className="transition-colors hover:bg-secondary/50">
+      <TableCell className="pl-4">
+        <div className="flex items-center gap-2.5">
+          <Avatar className="size-7">
+            <AvatarFallback className="text-[10px]">{initials(user.name)}</AvatarFallback>
+          </Avatar>
+          <span className="font-medium text-foreground">{user.name}</span>
+        </div>
+      </TableCell>
       <TableCell className="text-muted-foreground">{user.email}</TableCell>
       <TableCell>
-        {user.role === "admin" ? <Badge>Admin</Badge> : <Badge variant="outline">Agent</Badge>}
+        {user.role === "admin" ? <Badge>Admin</Badge> : <Badge variant="secondary">Agent</Badge>}
       </TableCell>
       <TableCell>
         {user.banned ? (
-          <Badge variant="destructive">Banned</Badge>
+          <Badge variant="danger">Banned</Badge>
         ) : (
-          <span className="text-sm text-muted-foreground">Active</span>
+          <Badge variant="success">Active</Badge>
         )}
       </TableCell>
       <TableCell className="text-right text-muted-foreground">

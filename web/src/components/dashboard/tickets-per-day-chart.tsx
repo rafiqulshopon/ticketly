@@ -10,7 +10,7 @@ import {
 import type { TicketDayCount } from "@ticketly/shared";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
 
-const tickStyle = { fontSize: 11, fill: "var(--muted-foreground)" };
+const tickStyle = { fontSize: 11, fill: "var(--muted-foreground)", fontFamily: "var(--font-mono)" };
 
 function formatDay(iso: string): string {
   return new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, {
