@@ -46,8 +46,8 @@ export type Ticket = z.infer<typeof ticketSchema>;
  * they fall back to the Prisma defaults (OPEN / NORMAL). `category` is optional
  * and stored as null when omitted (it is assigned later by the AI classify step,
  * so the column has no default). `requesterName` is required.
- * The SendGrid Inbound Parse webhook (Phase 3) will populate the same fields
- * after parsing the raw MIME; messageId/inReplyTo are filled in there, not here.
+ * The Resend inbound webhook populates the same fields after fetching the email
+ * via the Resend API; messageId/inReplyTo are filled in there, not here.
  *
  * Every string field is length-capped: this schema drives the untrusted inbound
  * webhook (`inboundEmailSchema` extends it, so the caps propagate), and an

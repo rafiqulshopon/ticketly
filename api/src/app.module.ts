@@ -37,6 +37,12 @@ import { auth } from "./auth/auth.config";
       // trustedOrigins CORS layer to avoid duplicate headers. (trustedOrigins is
       // still set in auth.config.ts for Better Auth's origin/CSRF check.)
       disableTrustedOriginsCors: true,
+      // Attach the raw request buffer to req.rawBody so the Resend inbound
+      // webhook can verify Svix signatures over the unparsed body. main.ts runs
+      // with bodyParser:false (Better Auth re-adds JSON/urlencoded parsing), so
+      // NestJS's own `rawBody: true` has no effect — this library option is the
+      // supported way to get the raw body.
+      bodyParser: { rawBody: true },
     }),
   ],
   controllers: [AppController],

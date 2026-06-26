@@ -50,7 +50,7 @@ _Backend (`api/`):_
 - [ ] Tickets module: read / list (filter by status/category/priority/assignee, sort, paginate)
 - [ ] Messages module: thread per ticket
 - [ ] Status transitions including **AwaitingStudent** + reopen rules
-- [ ] SendGrid outbound service: send an agent reply as email
+- [ ] Resend outbound service: send an agent reply as email
 
 _Frontend (`web/`):_
 
@@ -68,7 +68,7 @@ _Frontend (`web/`):_
 
 **Goal:** support emails auto-create tickets; replies thread correctly.
 
-- [ ] SendGrid Inbound Parse webhook endpoint (POST); verify SendGrid signature; idempotency by `Message-ID`
+- [ ] Resend inbound webhook endpoint (POST); verify Svix signature; idempotency by `Message-ID`
 - [ ] Parse inbound email → create Ticket + first Message; store requester email
 - [ ] Threading: match on `In-Reply-To` / `References`; fallback reconciliation (same requester + subject within a time window) with manual merge
 - [ ] Spam / out-of-scope handling (status or category bucket; basic filtering)
@@ -128,7 +128,7 @@ _Frontend (`web/`):_
 **Goal:** production-ready.
 
 - [ ] Frontend deploy (Vercel); backend deploy (Railway); production Neon DB
-- [ ] DNS: SPF / DKIM / DMARC for the SendGrid sending domain; verify deliverability
+- [ ] DNS: SPF / DKIM / DMARC for the Resend sending domain; verify deliverability
 - [ ] Security review: webhook signature checks, authz on every endpoint, CORS allowlist, Zod input validation, rate limiting, secrets management
 - [ ] Observability: structured logging, error tracking (Sentry), pg-boss job dashboards, LLM cost/token logging
 - [ ] Backups + retention policy; PII handling (ties to FERPA if applicable)

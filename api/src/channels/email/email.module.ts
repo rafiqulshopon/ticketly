@@ -1,31 +1,19 @@
 import { Module } from "@nestjs/common";
-import { MulterModule } from "@nestjs/platform-express";
-import { memoryStorage } from "multer";
 import { TicketsModule } from "../../tickets/tickets.module";
 import { InboundMailController } from "./inbound-mail.controller";
 import { InboundMailService } from "./inbound-mail.service";
-import { SendGridInboundController } from "./sendgrid-inbound.controller";
-import { SendGridInboundService } from "./sendgrid-inbound.service";
+import { ResendInboundController } from "./resend-inbound.controller";
+import { ResendInboundService } from "./resend-inbound.service";
 
 @Module({
-  // memoryStorage keeps SendGrid's multipart parts in memory (no temp files on
-  // disk) — we never persist attachments, only the parsed text fields, so the
-  // buffers are discarded after the request. AnyFilesInterceptor() on the
-  // SendGrid route reads these options automatically. The JSON inbound route is
-  // unaffected (no multer interceptor on it).
-  imports: [
-    TicketsModule,
-    MulterModule.register({
-      storage: memoryStorage(),
-      limits: {
-        fileSize: 25 * 1024 * 1024, // per file: raw MIME (send_raw) or attachment
-        fieldSize: 5 * 1024 * 1024, // per text field: large HTML bodies
-        fields: 50,
-        files: 20,
-      },
-    }),
-  ],
-  controllers: [InboundMailController, SendGridInboundController],
-  providers: [InboundMailService, SendGridInboundService],
+  // Resend posts a JSON webhook (no multipart), so no MulterModule is needed
+  // here. The multipart config was only needed for the previous (now-removed)
+  // multipart inbound provider; both current inbound routes are plain JSON. The
+  // JSON inbound route reads its body via the global JSON parser re-added by
+  // Better Auth; the Resend route reads the raw body (req.rawBody, attached via
+  // BetterAuthModule's rawBody option) for Svix signature verification.
+  imports: [TicketsModule],
+  controllers: [InboundMailController, ResendInboundController],
+  providers: [InboundMailService, ResendInboundService],
 })
 export class EmailChannelModule {}

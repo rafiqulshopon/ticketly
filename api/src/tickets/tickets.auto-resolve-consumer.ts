@@ -104,11 +104,13 @@ export class AutoResolveTicketConsumer implements OnApplicationBootstrap {
     if (decision.autoResolve && decision.confidence === "high") {
       // Attribute the reply to the system AI agent so the thread shows who answered.
       const aiAgentId = await this.systemAgent.getAiAgentId();
-      // Generated up-front: emailed (SendGrid honors a sender-supplied
+      // Generated up-front: emailed (Resend honors a sender-supplied
       // Message-ID) and persisted on the outbound Message so the customer's reply
       // threads back here via the inbound webhook.
       const messageId = this.mail.generateMessageId();
-      const from = this.mail.fromAddress();
+      // Reply FROM the per-ticket address so the customer's reply routes back here
+      // (ticket-<id>@<domain>) instead of relying on In-Reply-To/References headers.
+      const from = this.mail.ticketReplyAddress(ticketId);
       // Post the KB-grounded reply and resolve in one transaction. The transition
       // is conditional on PROCESSING so a mid-flight human edit isn't clobbered
       // (and no orphan reply is left behind if it is).
@@ -143,7 +145,7 @@ export class AutoResolveTicketConsumer implements OnApplicationBootstrap {
       if (replied) {
         this.logger.log(`Auto-resolve: ticket ${ticketId} resolved via knowledge base.`);
         // Best-effort outbound email — never throws; the resolve + reply are
-        // already committed, so a SendGrid outage logs rather than retrying the
+        // already committed, so a Resend outage logs rather than retrying the
         // whole job (which would re-run the LLM and risk a duplicate reply).
         await this.mail.sendReply({
           to: ticket.requesterEmail,

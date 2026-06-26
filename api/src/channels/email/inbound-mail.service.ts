@@ -10,9 +10,10 @@ import { TicketsService } from "../../tickets/tickets.service";
  * `messageId` (idempotency) and optional `inReplyTo` / `references` (so a reply
  * appends to its thread instead of creating a duplicate). We verify the
  * shared-secret token and ingest the email via TicketsService.ingestInbound,
- * which decides new-ticket vs. appended-reply. A provider (SendGrid, Mailgun, …)
+ * which decides new-ticket vs. appended-reply. A provider (Resend, Mailgun, …)
  * is wired by adapting its payload into this JSON contract — no provider code
- * lives here.
+ * lives here. The Resend adapter authenticates with a Svix signature instead of
+ * the shared secret, so it calls {@link ingest} directly (after verifying).
  *
  * The route is @AllowAnonymous (the caller has no session); the X-Webhook-Token
  * header, constant-time-compared to INBOUND_EMAIL_WEBHOOK_TOKEN, IS the access
@@ -25,6 +26,9 @@ export const inboundEmailSchema = createTicketSchema.extend({
     .array(z.string().min(1).max(512))
     .max(20, "Too many references")
     .optional(),
+  // Ticket id parsed from a `ticket-<id>@<domain>` recipient address — the primary
+  // threading signal (more reliable than In-Reply-To/References).
+  routingTicketId: z.number().int().positive().optional(),
 });
 export type InboundEmailInput = z.infer<typeof inboundEmailSchema>;
 
@@ -32,13 +36,30 @@ export type InboundEmailInput = z.infer<typeof inboundEmailSchema>;
 export class InboundMailService {
   constructor(private readonly tickets: TicketsService) {}
 
+  /**
+   * Ingest a provider-agnostic inbound email — the shared core both webhook
+   * entry points funnel through. Callers are responsible for authenticating the
+   * request *before* calling this: the JSON webhook verifies the shared-secret
+   * token ({@link handle}), the Resend webhook verifies a Svix signature (in its
+   * own controller) and calls this directly.
+   */
+  async ingest(
+    input: InboundEmailInput,
+  ): Promise<{ id: number; created: boolean; appended: boolean }> {
+    const { ticketId, created, appended } = await this.tickets.ingestInbound(input);
+    return { id: ticketId, created, appended };
+  }
+
+  /**
+   * JSON/dev webhook entry: verify the shared-secret `X-Webhook-Token`, then
+   * {@link ingest}. Resend's webhook does NOT use this — it has its own Svix auth.
+   */
   async handle(
     token: string | undefined,
     input: InboundEmailInput,
   ): Promise<{ id: number; created: boolean; appended: boolean }> {
     this.verifyToken(token);
-    const { ticketId, created, appended } = await this.tickets.ingestInbound(input);
-    return { id: ticketId, created, appended };
+    return this.ingest(input);
   }
 
   private verifyToken(token: string | undefined): void {

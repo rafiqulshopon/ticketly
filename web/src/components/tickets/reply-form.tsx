@@ -1,8 +1,15 @@
+import { useTransition } from "react";
 import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Wand2 } from "lucide-react";
-import { createReplySchema, type CreateReplyInput, type PolishReplyInput, type TicketDetail } from "@ticketly/shared";
+import {
+  createReplySchema,
+  type CreateReplyInput,
+  type PolishReplyInput,
+  type TicketDetail,
+  type TicketMessage,
+} from "@ticketly/shared";
 import { ApiError, polishReply, replyToTicket } from "@/lib/api";
 import { Button, Card, CardContent, CardHeader, CardTitle, Textarea, toast } from "@/components/ui";
 
@@ -32,19 +39,33 @@ function toPolishErrorMessage(err: unknown): string {
 
 /**
  * Reply composer for a ticket. Submits a plain-text body that the backend stores
- * as an outbound (agent) message in the conversation thread. On success the
- * refreshed ticket is written straight into the `["ticket", id]` cache (so the
- * new message and any status bump render immediately), the ticket list is
- * invalidated (status/updatedAt changed), and a toast confirms the send. On
- * failure the form stays mounted with an inline error.
+ * as an outbound (agent) message in the conversation thread.
+ *
+ * The reply is shown optimistically via React 19's `useOptimistic` (lifted to
+ * {@link TicketDetail}): `onOptimisticReply` is called inside the submit
+ * `startTransition`, so the temp message renders instantly while the network
+ * request is in flight. On success the refreshed ticket (with the REAL message)
+ * is written into the `["ticket", id]` cache and the ticket list is invalidated;
+ * React batches that with the transition ending, so the temp message is replaced
+ * by the real one with no flicker. On failure the optimistic message is discarded
+ * automatically and an inline error shows. The polish button stays independent.
  */
-export function ReplyForm({ ticket }: { ticket: TicketDetail }) {
+export function ReplyForm({
+  ticket,
+  onOptimisticReply,
+}: {
+  ticket: TicketDetail;
+  onOptimisticReply: (message: TicketMessage) => void;
+}) {
   // react-hook-form's useForm/watch return non-memoizable functions, so React
   // Compiler skips this component. The directive makes that opt-out explicit
   // (same behaviour, no warning) — ReplyForm owns its own form state and isn't
   // handed to a memoized child, so skipping memoization is safe.
   "use no memo";
   const queryClient = useQueryClient();
+  // The transition spans the whole send (optimistic add → await → cache update),
+  // so `isSending` is true for exactly that window and gates the buttons/textarea.
+  const [isSending, startTransition] = useTransition();
   const mutation = useMutation({
     mutationFn: (values: FormValues) => replyToTicket(ticket.id, values),
   });
@@ -60,7 +81,7 @@ export function ReplyForm({ ticket }: { ticket: TicketDetail }) {
     setValue,
     getValues,
     watch,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(createReplySchema) as Resolver<FormValues>,
     defaultValues: { bodyText: "" },
@@ -83,15 +104,31 @@ export function ReplyForm({ ticket }: { ticket: TicketDetail }) {
   const isAiPipeline = ticket.status === "NEW" || ticket.status === "PROCESSING";
 
   async function onSubmit(values: FormValues) {
-    try {
-      const updated = await mutation.mutateAsync(values);
-      queryClient.setQueryData(["ticket", ticket.id], updated);
-      queryClient.invalidateQueries({ queryKey: ["tickets"] });
-      reset({ bodyText: "" });
-      toast.success("Reply sent.");
-    } catch (err) {
-      setError("root", { message: toErrorMessage(err) });
-    }
+    startTransition(async () => {
+      // Show the reply instantly. `direction: "outbound"` + `senderType: "agent"`
+      // render it like a normal staff reply on the right side of the thread. The
+      // temp id is unique so it never collides with the real message that replaces it.
+      onOptimisticReply({
+        id: `optimistic-${crypto.randomUUID()}`,
+        direction: "outbound",
+        senderType: "agent",
+        fromEmail: "",
+        toEmail: ticket.requesterEmail,
+        senderName: null,
+        isAi: false,
+        bodyText: values.bodyText,
+        createdAt: new Date().toISOString(),
+      });
+      try {
+        const updated = await mutation.mutateAsync(values);
+        queryClient.setQueryData(["ticket", ticket.id], updated);
+        queryClient.invalidateQueries({ queryKey: ["tickets"] });
+        reset({ bodyText: "" });
+        toast.success("Reply sent.");
+      } catch (err) {
+        setError("root", { message: toErrorMessage(err) });
+      }
+    });
   }
 
   /**
@@ -124,7 +161,7 @@ export function ReplyForm({ ticket }: { ticket: TicketDetail }) {
             placeholder="Type your reply…"
             rows={5}
             aria-label="Reply body"
-            disabled={isSubmitting}
+            disabled={isSending}
             {...register("bodyText")}
           />
           {errors.root && <p className="text-sm text-destructive">{errors.root.message}</p>}
@@ -139,16 +176,16 @@ export function ReplyForm({ ticket }: { ticket: TicketDetail }) {
               variant="outline"
               size="sm"
               onClick={onPolish}
-              disabled={isAiPipeline || isSubmitting || polish.isPending || !bodyText.trim()}
+              disabled={isAiPipeline || isSending || polish.isPending || !bodyText.trim()}
             >
               <Wand2 className="size-4" />
               {polish.isPending ? "Polishing…" : "Polish"}
             </Button>
             <Button
               type="submit"
-              disabled={isAiPipeline || isSubmitting || polish.isPending || !bodyText.trim()}
+              disabled={isAiPipeline || isSending || polish.isPending || !bodyText.trim()}
             >
-              {isSubmitting ? "Sending…" : "Send reply"}
+              {isSending ? "Sending…" : "Send reply"}
             </Button>
           </div>
         </form>

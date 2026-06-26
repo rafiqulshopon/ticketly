@@ -35,7 +35,7 @@ Decoupled architecture: a **React SPA frontend** and a **NestJS backend API**, t
 
 ## Email
 
-- **SendGrid** — Inbound Parse webhook (receive support emails → create tickets) + outbound sending for agent replies. The webhook is received and verified by the NestJS backend.
+- **Resend** — Inbound webhook (receive support emails → create tickets) + outbound sending for agent replies. The inbound webhook is Svix-signed and verified by the NestJS backend, which then fetches the full email via the Resend API.
 
 ## Background jobs
 

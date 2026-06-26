@@ -22,8 +22,8 @@ import { TicketsService } from "./tickets.service";
  * decision for every handler here: the global AuthGuard rejects callers whose
  * session role isn't `admin` or `agent` with 403 before the handler runs. Both
  * are internal staff; creating a ticket is a normal staff action (not privileged
- * like user management). The Phase 3 SendGrid Inbound Parse webhook will be a
- * separate, public (@AllowAnonymous) route that reuses TicketsService directly.
+ * like user management). The Resend inbound webhook is a separate, public
+ * (@AllowAnonymous) route that reuses TicketsService directly.
  */
 @ApiTags("tickets")
 @Controller("tickets")

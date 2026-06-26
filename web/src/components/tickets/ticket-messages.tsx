@@ -1,4 +1,4 @@
-import { type ComponentProps } from "react";
+import { useEffect, useRef, type ComponentProps } from "react";
 import { Sparkles } from "lucide-react";
 import { type TicketMessage } from "@ticketly/shared";
 import { renderInlineMarkdown } from "@/lib/markdown";
@@ -37,6 +37,21 @@ function initials(value?: string | null): string {
 
 /** Conversation thread for a ticket — the list of inbound/outbound messages. */
 export function TicketMessages({ messages }: { messages: TicketMessage[] }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const prevLength = useRef(messages.length);
+
+  // Smooth-scroll to the newest message only when one is ADDED (not on initial
+  // mount), so sending a reply brings it into view instead of leaving it below the
+  // fold. The optimistic reply (added by useOptimistic in TicketDetail) bumps the
+  // length, so this fires the moment the user hits Send.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el && messages.length > prevLength.current) {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    }
+    prevLength.current = messages.length;
+  }, [messages.length]);
+
   return (
     <Card>
       <CardHeader>
@@ -46,7 +61,7 @@ export function TicketMessages({ messages }: { messages: TicketMessage[] }) {
         {messages.length === 0 ? (
           <p className="text-sm text-muted-foreground">No messages yet.</p>
         ) : (
-          <div className="scroll-slim flex max-h-[60vh] flex-col gap-5 overflow-y-auto pr-1">
+          <div ref={scrollRef} className="scroll-slim flex max-h-[60vh] flex-col gap-5 overflow-y-auto pr-1">
             {messages.map((message) => (
               <MessageItem key={message.id} message={message} />
             ))}

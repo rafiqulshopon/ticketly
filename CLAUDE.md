@@ -91,7 +91,7 @@ The product's LLM is **GLM 5.2** via Zhipu's OpenAI-compatible endpoint — **no
 
 ## Looking up docs — use context7
 
-Use the **context7 MCP server** to fetch up-to-date documentation **before relying on memory** for any library/framework in this stack: NestJS, Prisma, Better Auth (`@thallesp/nestjs-better-auth`), Vite, React, React Router, Zod, TanStack Query, Tailwind, shadcn/ui, pg-boss, SendGrid. These move fast and training data goes stale.
+Use the **context7 MCP server** to fetch up-to-date documentation **before relying on memory** for any library/framework in this stack: NestJS, Prisma, Better Auth (`@thallesp/nestjs-better-auth`), Vite, React, React Router, Zod, TanStack Query, Tailwind, shadcn/ui, pg-boss, Resend. These move fast and training data goes stale.
 
 - Call `mcp__context7__resolve-library-id` first to get the Context7 library id, then `mcp__context7__query-docs` with it.
 - Prefer context7 over web search for library/API questions (config, version migration, exact API syntax).

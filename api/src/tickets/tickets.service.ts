@@ -50,6 +50,7 @@ export type IngestInboundInput = CreateTicketInput & {
   messageId?: string | null;
   inReplyTo?: string | null;
   references?: string[] | null;
+  routingTicketId?: number | null;
 };
 
 /** Outcome of ingesting one inbound email — exactly one of created/appended means
@@ -211,7 +212,7 @@ export class TicketsService {
    * through to a new ticket. Append does NOT change ticket status or re-run AI
    * (reopen / re-classify are separate follow-ups). Idempotency is on
    * Message.messageId (unique), which covers both the originating message
-   * create() wrote and any appended reply, so a SendGrid retry is always a no-op;
+   * create() wrote and any appended reply, so a Resend retry is always a no-op;
    * the append path additionally reconciles the unique-constraint race under
    * concurrent retries by treating P2002 as "already appended".
    */
@@ -227,28 +228,43 @@ export class TicketsService {
       if (existing) return { ticketId: existing.ticketId, created: false, appended: false };
     }
 
-    // 2. Threading lookup — match In-Reply-To, then each Reference, against any
-    //    Message-ID on an existing message (a follow-up in the thread) or the
-    //    ticket's own originating Message-ID. Dedupe + keep In-Reply-To first.
-    const candidateIds = [
-      input.inReplyTo,
-      ...(input.references ?? []),
-    ].filter((v): v is string => typeof v === "string" && v.length > 0);
-    const uniqueCandidateIds = [...new Set(candidateIds)];
+    // 2. Resolve the parent ticket, if any. The recipient address is the PRIMARY
+    //    signal — a `ticket-<id>@` address that Ticketly sends from. It's always
+    //    present and never altered by mail clients, unlike the RFC822 threading
+    //    headers Resend's inbound fetch omits. Header-based lookup stays as a
+    //    fallback for old tickets / the dev webhook. Either way the requester-email
+    //    gate (step 3) still applies, so a cross-ticket reply can't inject.
     let parent: { id: number; requesterEmail: string } | null = null;
-    if (uniqueCandidateIds.length > 0) {
-      const replyTarget = await this.prisma.message.findFirst({
-        where: { messageId: { in: uniqueCandidateIds } },
-        orderBy: { createdAt: "desc" },
-        select: { ticket: { select: { id: true, requesterEmail: true } } },
+
+    if (input.routingTicketId) {
+      parent = await this.prisma.ticket.findUnique({
+        where: { id: input.routingTicketId },
+        select: { id: true, requesterEmail: true },
       });
-      parent = replyTarget?.ticket ?? null;
-      if (!parent) {
-        parent = await this.prisma.ticket.findFirst({
+    }
+
+    if (!parent) {
+      // Fallback: match In-Reply-To, then each Reference, against a stored Message-ID
+      // on an existing message (a follow-up) or the ticket's originating Message-ID.
+      const candidateIds = [
+        input.inReplyTo,
+        ...(input.references ?? []),
+      ].filter((v): v is string => typeof v === "string" && v.length > 0);
+      const uniqueCandidateIds = [...new Set(candidateIds)];
+      if (uniqueCandidateIds.length > 0) {
+        const replyTarget = await this.prisma.message.findFirst({
           where: { messageId: { in: uniqueCandidateIds } },
           orderBy: { createdAt: "desc" },
-          select: { id: true, requesterEmail: true },
+          select: { ticket: { select: { id: true, requesterEmail: true } } },
         });
+        parent = replyTarget?.ticket ?? null;
+        if (!parent) {
+          parent = await this.prisma.ticket.findFirst({
+            where: { messageId: { in: uniqueCandidateIds } },
+            orderBy: { createdAt: "desc" },
+            select: { id: true, requesterEmail: true },
+          });
+        }
       }
     }
 
@@ -455,7 +471,7 @@ export class TicketsService {
    * untouched — no silent reopen. Both writes happen in one transaction.
    *
    * After the in-thread reply is persisted, it is emailed to the requester via
-   * SendGrid (OutboundMailService) — best-effort: a SendGrid failure is logged
+   * Resend (OutboundMailService) — best-effort: a Resend failure is logged
    * but never rolls back the persisted reply or fails this request, so the
    * agent's work survives a transient mail outage. The send carries a
    * client-generated Message-ID (+ In-Reply-To/References to the originating
@@ -471,11 +487,13 @@ export class TicketsService {
     if (!ticket) throw new NotFoundException("Ticket not found");
 
     const nextStatus = ticket.status === "OPEN" ? "AWAITING_STUDENT" : undefined;
-    // Generated up-front so the same Message-ID is both emailed (SendGrid honors
+    // Generated up-front so the same Message-ID is both emailed (Resend honors
     // a sender-supplied Message-ID) and persisted — a customer reply threads back
     // here via the inbound webhook's Message.messageId lookup.
     const messageId = this.mail.generateMessageId();
-    const from = this.mail.fromAddress();
+    // Reply FROM the per-ticket address so the customer's reply routes back here
+    // (ticket-<id>@<domain>) instead of relying on In-Reply-To/References headers.
+    const from = this.mail.ticketReplyAddress(ticketId);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.message.create({
@@ -499,7 +517,7 @@ export class TicketsService {
     });
 
     // Best-effort outbound email — never throws; the in-thread reply is already
-    // persisted, so a SendGrid outage degrades to "reply saved, email not sent"
+    // persisted, so a Resend outage degrades to "reply saved, email not sent"
     // (logged) rather than failing the agent's request.
     await this.mail.sendReply({
       to: ticket.requesterEmail,
