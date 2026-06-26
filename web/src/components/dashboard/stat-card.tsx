@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton } from "@/components/ui";
 
@@ -15,12 +16,22 @@ interface StatCardProps {
   tone?: "default" | "ai";
   /** When true, renders skeletons for the label/value (initial load). */
   isLoading?: boolean;
+  /** When set, the whole card becomes a router link (e.g. a dashboard deep-link
+   *  into a filtered ticket list). Adds a hover affordance + focus ring. */
+  to?: string;
 }
 
-/** A single metric tile for the dashboard. Composes shadcn Card primitives. */
-export function StatCard({ label, value, description, icon, tone = "default", isLoading }: StatCardProps) {
-  return (
-    <Card>
+/** A single metric tile for the dashboard. Composes shadcn Card primitives.
+ *  Pass `to` to make it a navigable link. */
+export function StatCard({ label, value, description, icon, tone = "default", isLoading, to }: StatCardProps) {
+  const card = (
+    <Card
+      className={cn(
+        "h-full",
+        to &&
+          "cursor-pointer transition-colors hover:border-primary/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+      )}
+    >
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardDescription>{isLoading ? <Skeleton className="h-4 w-24" /> : label}</CardDescription>
@@ -45,5 +56,13 @@ export function StatCard({ label, value, description, icon, tone = "default", is
         </CardContent>
       )}
     </Card>
+  );
+
+  return to ? (
+    <Link to={to} className="block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-lg">
+      {card}
+    </Link>
+  ) : (
+    card
   );
 }

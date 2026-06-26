@@ -1,3 +1,5 @@
+import type { TicketStatus } from "../generated/prisma/client";
+
 /**
  * The system "AI" agent — a bare `User` (no login credentials) that new tickets
  * are assigned to while the auto-resolver attempts to handle them. Looked up by
@@ -6,3 +8,8 @@
  * without pulling in the service's heavy transitive deps (AiService, pg-boss…).
  */
 export const SYSTEM_AGENT_EMAIL = "ai@ticketly.local";
+
+/** Terminal statuses — a ticket counts as resolved once it reaches either.
+ *  Shared by the dashboard stats and the ticket-list `view` filter so the two
+ *  can't drift apart. */
+export const RESOLVED_STATUSES: TicketStatus[] = ["RESOLVED", "CLOSED"];

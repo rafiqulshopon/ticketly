@@ -2,10 +2,11 @@ import { type ComponentProps } from "react";
 import type { TicketListItem } from "@ticketly/shared";
 import { Badge } from "@/components/ui";
 
-// Shared label/colour maps for ticket status + priority, plus the enum label
-// helper. Kept in a plain (non-component) module so Fast Refresh stays valid in
-// the components that consume them — the table, the ticket header, and the
-// properties sidebar all import from here.
+// Shared label/colour maps for ticket status + priority, the dashboard "view"
+// bucket labels, and the enum label helper. Kept in a plain (non-component)
+// module so Fast Refresh stays valid in the components that consume them — the
+// table, the ticket header, the properties sidebar, the filter toolbar, and the
+// tickets page header all import from here.
 
 export type BadgeVariant = ComponentProps<typeof Badge>["variant"];
 
@@ -41,4 +42,15 @@ export const PRIORITY_BADGES: Record<
   HIGH: { label: "High", variant: "danger" },
   NORMAL: { label: "Normal", variant: "outline" },
   LOW: { label: "Low", variant: "secondary" },
+};
+
+// Labels for the dashboard "bucket" deep-link (?view=all|open|resolvedByAi).
+// Shared by the tickets page header subtitle and the filter toolbar's active-view
+// chip. A plain string-keyed map (not a closed enum Record) because `view` is a
+// free query param validated server-side; the consumer falls back to the raw
+// value for anything unmapped.
+export const TICKET_VIEW_LABELS: Record<string, string> = {
+  all: "All tickets",
+  open: "Open tickets",
+  resolvedByAi: "Resolved by AI",
 };

@@ -38,6 +38,12 @@ export class TicketsController {
   @ApiQuery({ name: "priority", required: false })
   @ApiQuery({ name: "assigneeId", required: false })
   @ApiQuery({
+    name: "view",
+    required: false,
+    enum: ["all", "open", "resolvedByAi"],
+    description: "Dashboard bucket deep-link: all (incl. pipeline), open (not resolved), resolvedByAi. Ignored when status is set.",
+  })
+  @ApiQuery({
     name: "sortBy",
     required: false,
     enum: ["createdAt", "subject", "requesterName", "status"],
@@ -52,9 +58,16 @@ export class TicketsController {
   @ApiQuery({ name: "page", required: false, type: Number, description: "1-based page (default 1)" })
   @ApiQuery({ name: "pageSize", required: false, type: Number, description: "Page size, 1–100 (default 25)" })
   @Get()
-  list(@Query() raw: Record<string, string | undefined>) {
+  list(
+    @Query() raw: Record<string, string | undefined>,
+    @Session() session: UserSession<typeof auth>,
+  ) {
     const query: ListTicketsQuery = listTicketsQuerySchema.parse(raw ?? {});
-    return this.tickets.list(query);
+    // The AI pipeline states (NEW/PROCESSING) are admin-only in the list; the
+    // service enforces that from the caller's role, so resolve it here.
+    const role = session.user.role;
+    const isAdmin = Array.isArray(role) ? role.includes("admin") : role === "admin";
+    return this.tickets.list(query, { isAdmin });
   }
 
   @ApiOperation({ summary: "List staff available for assignment" })

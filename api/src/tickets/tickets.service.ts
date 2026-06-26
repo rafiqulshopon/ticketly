@@ -28,7 +28,7 @@ import {
   type ClassifyTicketJobData,
 } from "../queue/queue.constants";
 import { QueueService } from "../queue/queue.service";
-import { SYSTEM_AGENT_EMAIL } from "./tickets.constants";
+import { RESOLVED_STATUSES, SYSTEM_AGENT_EMAIL } from "./tickets.constants";
 
 /**
  * Placeholder destination for the first inbound message on a ticket. There is no
@@ -298,11 +298,48 @@ export class TicketsService {
    * Ticket list, server-sorted by the requested column (default `createdAt`
    * DESC = newest first). `q` is a case-insensitive substring match on subject
    * or requester email; status/category/priority/assigneeId are optional
-   * equality filters (wired into the UI later). All staff see all tickets here
-   * — no assignee scoping (shared inbox).
+   * equality filters. `view` selects a dashboard bucket predicate (see
+   * listTicketsQuerySchema). All staff see all tickets here — no assignee
+   * scoping (shared inbox) — EXCEPT the AI pipeline states (NEW/PROCESSING):
+   * those are admin-only here. The caller's role drives that boundary, so it
+   * is enforced server-side regardless of the requested status/view.
    */
-  async list(opts: ListTicketsQuery): Promise<TicketListResponse> {
-    const { q, status, category, priority, assigneeId, sortBy, sortDir, page, pageSize } = opts;
+  async list(opts: ListTicketsQuery, caller: { isAdmin: boolean }): Promise<TicketListResponse> {
+    const { q, status, category, priority, assigneeId, view, sortBy, sortDir, page, pageSize } = opts;
+    const { isAdmin } = caller;
+
+    // Build the Prisma `status` field condition. `undefined` means "no status
+    // filter" (every status). Precedence: an explicit `status` wins; then a
+    // `view` bucket; then the role default. The NEW/PROCESSING pipeline states
+    // are hidden from agents in EVERY branch — including an explicit
+    // status=NEW, which an agent can only reach by hand-crafting the URL
+    // (the dropdown doesn't offer it), and which then yields an empty result.
+    let statusFilter:
+      | { equals: TicketStatus }
+      | { in: TicketStatus[] }
+      | { notIn: TicketStatus[] }
+      | undefined;
+    let requireAiMessage = false;
+
+    if (status) {
+      statusFilter = isAdmin || !HIDDEN_FROM_DEFAULT_LIST.includes(status) ? { equals: status } : { in: [] };
+    } else if (view === "resolvedByAi") {
+      // Resolved/closed tickets whose resolving reply was an AI message — the
+      // exact predicate behind the dashboard "Resolved by AI" card.
+      statusFilter = { in: RESOLVED_STATUSES };
+      requireAiMessage = true;
+    } else if (view === "open") {
+      // "Open" = not yet resolved. Agents additionally exclude the pipeline states.
+      const excluded = isAdmin ? RESOLVED_STATUSES : [...RESOLVED_STATUSES, ...HIDDEN_FROM_DEFAULT_LIST];
+      statusFilter = { notIn: excluded };
+    } else {
+      // Default (and view=all): admins see every status; agents see only the
+      // human-actionable inbox (pipeline states hidden).
+      statusFilter = isAdmin ? undefined : { notIn: HIDDEN_FROM_DEFAULT_LIST };
+    }
+
+    const aiAgentId = requireAiMessage ? await this.systemAgent.getAiAgentId() : null;
+
     const where = {
       ...(q
         ? {
@@ -312,11 +349,18 @@ export class TicketsService {
             ],
           }
         : {}),
-      // No explicit status filter → hide the AI auto-resolution pipeline states
-      // (NEW / PROCESSING) so the inbox only shows tickets that need a human. An
-      // explicit status selection — incl. New/Processing for oversight — is
-      // always honored over this default exclusion.
-      ...(status ? { status } : { status: { notIn: HIDDEN_FROM_DEFAULT_LIST } }),
+      ...(statusFilter ? { status: statusFilter } : {}),
+      ...(requireAiMessage
+        ? {
+            messages: {
+              some: {
+                direction: "outbound" as const,
+                senderType: "agent" as const,
+                OR: [{ senderId: null }, ...(aiAgentId ? [{ senderId: aiAgentId }] : [])],
+              },
+            },
+          }
+        : {}),
       ...(category ? { category } : {}),
       ...(priority ? { priority } : {}),
       ...(assigneeId ? { assigneeId } : {}),

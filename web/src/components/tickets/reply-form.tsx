@@ -39,6 +39,11 @@ function toPolishErrorMessage(err: unknown): string {
  * failure the form stays mounted with an inline error.
  */
 export function ReplyForm({ ticket }: { ticket: TicketDetail }) {
+  // react-hook-form's useForm/watch return non-memoizable functions, so React
+  // Compiler skips this component. The directive makes that opt-out explicit
+  // (same behaviour, no warning) — ReplyForm owns its own form state and isn't
+  // handed to a memoized child, so skipping memoization is safe.
+  "use no memo";
   const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: (values: FormValues) => replyToTicket(ticket.id, values),
@@ -61,9 +66,21 @@ export function ReplyForm({ ticket }: { ticket: TicketDetail }) {
     defaultValues: { bodyText: "" },
   });
 
-  // Live draft value — drives the Polish button's disabled state so it can't fire
+  // Live draft value — drives the Polish/Send disabled state so they can't fire
   // on an empty textarea. `watch` re-renders per keystroke, fine for one field.
+  // Not a safety guard: createReplySchema already rejects an empty body, and
+  // onPolish early-returns — this is only the greyed-out-button nicety.
+  //
+  // `watch` is on React Compiler's incompatible-API list (eslint flags it), but
+  // this component is `"use no memo"`, so the compiler already skips it — the
+  // exact behaviour the warning anticipates — and it never passes form values to
+  // a memoized child. Safe to silence here.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const bodyText = watch("bodyText");
+
+  // While the AI auto-resolver owns the ticket (NEW/PROCESSING), a human reply or
+  // polish is out of band — disable both until the ticket lands in a human state.
+  const isAiPipeline = ticket.status === "NEW" || ticket.status === "PROCESSING";
 
   async function onSubmit(values: FormValues) {
     try {
@@ -111,18 +128,26 @@ export function ReplyForm({ ticket }: { ticket: TicketDetail }) {
             {...register("bodyText")}
           />
           {errors.root && <p className="text-sm text-destructive">{errors.root.message}</p>}
+          {isAiPipeline && (
+            <p className="text-sm text-muted-foreground">
+              AI is handling this ticket — manual reply and polish are disabled until it moves out of New/Processing.
+            </p>
+          )}
           <div className="flex items-center justify-end gap-2">
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={onPolish}
-              disabled={isSubmitting || polish.isPending || !bodyText.trim()}
+              disabled={isAiPipeline || isSubmitting || polish.isPending || !bodyText.trim()}
             >
               <Wand2 className="size-4" />
               {polish.isPending ? "Polishing…" : "Polish"}
             </Button>
-            <Button type="submit" disabled={isSubmitting || polish.isPending || !bodyText.trim()}>
+            <Button
+              type="submit"
+              disabled={isAiPipeline || isSubmitting || polish.isPending || !bodyText.trim()}
+            >
               {isSubmitting ? "Sending…" : "Send reply"}
             </Button>
           </div>

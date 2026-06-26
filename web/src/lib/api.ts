@@ -112,6 +112,8 @@ export interface GetTicketsParams {
   category?: string;
   priority?: string;
   assigneeId?: string;
+  /** Dashboard bucket deep-link: "all" | "open" | "resolvedByAi". Ignored by the server when status is also set. */
+  view?: string;
   /** Sort column — createdAt | subject | requesterName | status (server default: createdAt; server 400s on others). */
   sortBy?: string;
   /** Sort direction — "asc" | "desc" (server default: desc). */
@@ -134,6 +136,7 @@ export async function getTickets(
   if (params.category) qs.set("category", params.category);
   if (params.priority) qs.set("priority", params.priority);
   if (params.assigneeId) qs.set("assigneeId", params.assigneeId);
+  if (params.view) qs.set("view", params.view);
   if (params.sortBy) qs.set("sortBy", params.sortBy);
   if (params.sortDir) qs.set("sortDir", params.sortDir);
   if (params.page != null) qs.set("page", String(params.page));

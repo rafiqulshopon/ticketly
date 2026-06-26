@@ -1,11 +1,8 @@
 import { Injectable, Logger } from "@nestjs/common";
 import type { DashboardStats, TicketDayCount } from "@ticketly/shared";
-import type { TicketStatus } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { SystemAgentService } from "../system-agent/system-agent.service";
-
-/** Terminal statuses — a ticket counts as resolved once it reaches either. */
-const RESOLVED_STATUSES: TicketStatus[] = ["RESOLVED", "CLOSED"];
+import { RESOLVED_STATUSES } from "../tickets/tickets.constants";
 
 /**
  * Read-only aggregate metrics for the admin dashboard. `@Roles(["admin"])` on the

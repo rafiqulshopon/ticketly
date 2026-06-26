@@ -130,6 +130,15 @@ export const listTicketsQuerySchema = z.object({
   category: ticketCategoryEnum.optional(),
   priority: priorityEnum.optional(),
   assigneeId: z.string().optional(),
+  // A dashboard "bucket" that selects a compound status predicate the single
+  // `status` enum can't express. Mirrors the dashboard stat card predicates:
+  //   "all"          → every status (incl. the NEW/PROCESSING pipeline states
+  //                    that the default list hides) — bypasses the default exclusion
+  //   "open"         → not yet resolved/closed (NEW, PROCESSING, OPEN, AWAITING_STUDENT)
+  //   "resolvedByAi" → resolved/closed AND the resolving reply was an AI message
+  // Used for dashboard card → filtered list deep-links. Ignored when an explicit
+  // `status` is also given (status is the more specific filter).
+  view: z.enum(["all", "open", "resolvedByAi"]).optional(),
   // Sortable columns are a closed enum — the values are the column ids everywhere
   // (TanStack column id, the wire param, and the backend Prisma field name).
   // Priority/category/id are intentionally excluded (alphabetical enum sort is

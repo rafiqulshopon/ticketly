@@ -58,11 +58,13 @@ export function DashboardPage() {
               label="Total tickets"
               value={data.totalTickets.toLocaleString()}
               icon={<Ticket className="size-4" />}
+              to="/tickets?view=all"
             />
             <StatCard
               label="Open tickets"
               value={data.openTickets.toLocaleString()}
               icon={<Inbox className="size-4" />}
+              to="/tickets?view=open"
             />
             <StatCard
               label="Resolved by AI"
@@ -70,6 +72,7 @@ export function DashboardPage() {
               description={`of ${data.totalResolved.toLocaleString()} resolved`}
               icon={<Sparkles className="size-4" />}
               tone="ai"
+              to="/tickets?view=resolvedByAi"
             />
             <StatCard
               label="AI resolution rate"
