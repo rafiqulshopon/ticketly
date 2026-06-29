@@ -15,7 +15,19 @@ import {
   type UpdateTicketInput,
 } from "@ticketly/shared";
 import { auth } from "../auth/auth.config";
-import { TicketsService } from "./tickets.service";
+import { TicketsService, type TicketCaller } from "./tickets.service";
+
+/**
+ * Resolve the access-scoping identity from the better-auth session: the user id
+ * (agents are limited to tickets assigned to them) and the admin flag (admins
+ * see/act on all). Shared by every ticket list + per-ticket handler so the
+ * scoping is consistent and can't drift between endpoints.
+ */
+function toCaller(session: UserSession<typeof auth>): TicketCaller {
+  const role = session.user.role;
+  const isAdmin = Array.isArray(role) ? role.includes("admin") : role === "admin";
+  return { userId: session.user.id, isAdmin };
+}
 
 /**
  * Ticket creation. The class-level @Roles(["admin", "agent"]) is the access
@@ -65,11 +77,9 @@ export class TicketsController {
     const query: ListTicketsQuery = listTicketsQuerySchema.parse(raw ?? {});
     // The list is scoped by the caller: agents see only their own assigned
     // tickets, admins see the whole inbox. The service also hides the AI
-    // pipeline states (NEW/PROCESSING) from agents — both are driven by the
-    // role/id resolved here, so neither can be bypassed from the client.
-    const role = session.user.role;
-    const isAdmin = Array.isArray(role) ? role.includes("admin") : role === "admin";
-    return this.tickets.list(query, { userId: session.user.id, isAdmin });
+    // pipeline states (NEW/PROCESSING) from agents — both are enforced
+    // server-side from the identity resolved here, so neither can be bypassed.
+    return this.tickets.list(query, toCaller(session));
   }
 
   @ApiOperation({ summary: "List staff available for assignment" })
@@ -80,20 +90,27 @@ export class TicketsController {
 
   @ApiOperation({ summary: "Get a single ticket (metadata only)" })
   @Get(":id")
-  findOne(@Param("id") id: string) {
-    return this.tickets.findOne(Number(id));
+  findOne(
+    @Param("id") id: string,
+    @Session() session: UserSession<typeof auth>,
+  ) {
+    return this.tickets.findOne(Number(id), toCaller(session));
   }
 
   @ApiOperation({ summary: "Update a ticket (assignee)" })
   @Patch(":id")
-  update(@Param("id") id: string, @Body() body: unknown) {
+  update(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Session() session: UserSession<typeof auth>,
+  ) {
     let input: UpdateTicketInput;
     try {
       input = updateTicketSchema.parse(body);
     } catch {
       throw new BadRequestException("Invalid ticket data");
     }
-    return this.tickets.update(Number(id), input);
+    return this.tickets.update(Number(id), input, toCaller(session));
   }
 
   @ApiOperation({ summary: "Reply to a ticket (append an outbound message)" })
@@ -102,8 +119,8 @@ export class TicketsController {
     @Param("id") id: string,
     @Body() body: unknown,
     // @Session() is the better-auth param decorator; `session.user.id` is the
-    // signed-in agent who becomes the reply's sender. First consumer of @Session
-    // in this repo.
+    // signed-in agent who becomes the reply's sender, and toCaller() scopes the
+    // call to their own tickets.
     @Session() session: UserSession<typeof auth>,
   ) {
     let input: CreateReplyInput;
@@ -112,7 +129,7 @@ export class TicketsController {
     } catch {
       throw new BadRequestException("Invalid reply data");
     }
-    return this.tickets.reply(Number(id), input, session.user.id);
+    return this.tickets.reply(Number(id), input, session.user.id, toCaller(session));
   }
 
   @ApiOperation({ summary: "Polish a drafted reply with AI" })
@@ -130,15 +147,18 @@ export class TicketsController {
     } catch {
       throw new BadRequestException("Invalid polish request");
     }
-    return this.tickets.polish(Number(id), input, session.user.name);
+    return this.tickets.polish(Number(id), input, session.user.name, toCaller(session));
   }
 
   @ApiOperation({ summary: "Summarize a ticket and its conversation with AI" })
   @Post(":id/summarize")
-  summarize(@Param("id") id: string) {
+  summarize(
+    @Param("id") id: string,
+    @Session() session: UserSession<typeof auth>,
+  ) {
     // No request body — the endpoint is keyed by the ticket id alone and reads
     // the thread server-side. The summary is regenerated on every call.
-    return this.tickets.summarize(Number(id));
+    return this.tickets.summarize(Number(id), toCaller(session));
   }
 
   @ApiOperation({ summary: "Create a ticket from an inbound request (email-like)" })

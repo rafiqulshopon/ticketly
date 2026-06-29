@@ -58,6 +58,12 @@ export type IngestInboundInput = CreateTicketInput & {
  *  a row was written; both false means it was a duplicate redelivery. */
 export type IngestResult = { ticketId: number; created: boolean; appended: boolean };
 
+/** Caller identity for access-scoped ticket operations. Admins see and act on
+ *  every ticket; agents are limited to tickets assigned to them. Built in the
+ *  controller from the better-auth session, so the scoping is enforced
+ *  server-side regardless of any client-supplied id. */
+export type TicketCaller = { userId: string; isAdmin: boolean };
+
 /** Statuses the AI auto-resolution pipeline owns (NEW = just arrived,
  *  PROCESSING = AI is attempting to resolve). Hidden from the default ticket
  *  list so the inbox shows only tickets that need a human; an explicit status
@@ -347,7 +353,7 @@ export class TicketsService {
    * subject to the AI pipeline boundary: the NEW/PROCESSING states are
    * admin-only here, driven by the caller's role.
    */
-  async list(opts: ListTicketsQuery, caller: { userId: string; isAdmin: boolean }): Promise<TicketListResponse> {
+  async list(opts: ListTicketsQuery, caller: TicketCaller): Promise<TicketListResponse> {
     const { q, status, category, priority, assigneeId, view, sortBy, sortDir, page, pageSize } = opts;
     const { userId, isAdmin } = caller;
 
@@ -437,13 +443,43 @@ export class TicketsService {
   }
 
   /**
-   * Single ticket by id. Resolves the assignee relation into name/email for
-   * human-readable display and includes the conversation `messages` (oldest
-   * first), each with its staff `sender` name resolved. Unscoped (shared inbox):
-   * all staff see all tickets, matching list(). Throws NotFoundException (404)
-   * when the id doesn't exist.
+   * Per-ticket ownership gate. Admins pass through; agents are restricted to
+   * tickets assigned to them. Throws 404 (not 403) whether the ticket is
+   * missing OR merely out of scope, so the existence of a ticket an agent can't
+   * see is never leaked. Called once at the top of every public per-ticket
+   * method; the in-method loads that follow use loadTicketDetail() unchecked.
    */
-  async findOne(id: number): Promise<TicketDetail> {
+  private async assertAccess(id: number, caller: TicketCaller): Promise<void> {
+    if (caller.isAdmin) return;
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id },
+      select: { assigneeId: true },
+    });
+    if (!ticket || ticket.assigneeId !== caller.userId) {
+      throw new NotFoundException("Ticket not found");
+    }
+  }
+
+  /**
+   * Single ticket by id, access-scoped to the caller. Resolves the assignee
+   * relation into name/email for human-readable display and includes the
+   * conversation `messages` (oldest first), each with its staff `sender` name
+   * resolved. Agents get 404 for tickets not assigned to them (via
+   * assertAccess); admins see any. Throws NotFoundException (404) otherwise.
+   */
+  async findOne(id: number, caller: TicketCaller): Promise<TicketDetail> {
+    await this.assertAccess(id, caller);
+    return this.loadTicketDetail(id);
+  }
+
+  /**
+   * Unchecked detail loader — the body of the old findOne(). Public per-ticket
+   * methods assert access up front (via assertAccess) then call this for the
+   * detail/context, so an operation that reassigns a ticket mid-request (e.g.
+   * update moving it off the caller) still resolves and returns normally rather
+   * than tripping a second ownership check.
+   */
+  private async loadTicketDetail(id: number): Promise<TicketDetail> {
     const ticket = await this.prisma.ticket.findUnique({
       where: { id },
       include: {
@@ -507,10 +543,17 @@ export class TicketsService {
    * agent's work survives a transient mail outage. The send carries a
    * client-generated Message-ID (+ In-Reply-To/References to the originating
    * inbound Message-ID), persisted here so a customer reply threads back onto
-   * this ticket via the inbound webhook. Throws NotFoundException (404) for an
-   * unknown ticket. Unscoped (shared inbox), matching list()/findOne().
+   * this ticket via the inbound webhook. Access-scoped via assertAccess (agents
+   * may only reply to tickets assigned to them); throws NotFoundException (404)
+   * for an unknown or out-of-scope ticket.
    */
-  async reply(ticketId: number, input: CreateReplyInput, senderId: string): Promise<TicketDetail> {
+  async reply(
+    ticketId: number,
+    input: CreateReplyInput,
+    senderId: string,
+    caller: TicketCaller,
+  ): Promise<TicketDetail> {
+    await this.assertAccess(ticketId, caller);
     const ticket = await this.prisma.ticket.findUnique({
       where: { id: ticketId },
       select: { id: true, status: true, subject: true, requesterEmail: true, messageId: true },
@@ -561,21 +604,27 @@ export class TicketsService {
       references: ticket.messageId ?? undefined,
     });
 
-    return this.findOne(ticketId);
+    return this.loadTicketDetail(ticketId);
   }
 
   /**
    * AI-polish a drafted reply, using the ticket's conversation as context.
    * Read-only — persists nothing and sends no mail; it returns the improved body
    * for the agent to review and edit before sending. The returned body is signed
-   * with the agent's name and the product name (Ticketly). Reuses `findOne` for
-   * both the 404 check and the conversation context (subject + messages). A
-   * model/provider failure surfaces as a 502 Bad Gateway so the client can tell an
-   * AI outage apart from an app error. Throws NotFoundException (404) for an
-   * unknown ticket.
+   * with the agent's name and the product name (Ticketly). Access is asserted up
+   * front (assertAccess), then loadTicketDetail() supplies the conversation
+   * context. A model/provider failure surfaces as a 502 Bad Gateway so the client
+   * can tell an AI outage apart from an app error. Throws NotFoundException (404)
+   * for an unknown or out-of-scope ticket.
    */
-  async polish(id: number, input: PolishReplyInput, agentName: string): Promise<PolishReplyResult> {
-    const ticket = await this.findOne(id);
+  async polish(
+    id: number,
+    input: PolishReplyInput,
+    agentName: string,
+    caller: TicketCaller,
+  ): Promise<PolishReplyResult> {
+    await this.assertAccess(id, caller);
+    const ticket = await this.loadTicketDetail(id);
     let bodyText: string;
     try {
       bodyText = await this.ai.polishReply(input.bodyText, ticket, agentName);
@@ -590,13 +639,14 @@ export class TicketsService {
    * AI-summarize a ticket and its conversation. Read-only — persists nothing; it
    * returns a plain-text digest for the agent. The summary is generated fresh on
    * every call (no caching), so the client "regenerates" simply by calling again.
-   * Reuses `findOne` for both the 404 check and the conversation context. A
-   * model/provider failure surfaces as a 502 Bad Gateway so the client can tell an
-   * AI outage apart from an app error. Throws NotFoundException (404) for an
-   * unknown ticket.
+   * Access is asserted up front (assertAccess), then loadTicketDetail() supplies
+   * the conversation context. A model/provider failure surfaces as a 502 Bad
+   * Gateway so the client can tell an AI outage apart from an app error. Throws
+   * NotFoundException (404) for an unknown or out-of-scope ticket.
    */
-  async summarize(id: number): Promise<SummarizeTicketResult> {
-    const ticket = await this.findOne(id);
+  async summarize(id: number, caller: TicketCaller): Promise<SummarizeTicketResult> {
+    await this.assertAccess(id, caller);
+    const ticket = await this.loadTicketDetail(id);
     let summary: string;
     try {
       summary = await this.ai.summarizeTicket(ticket);
@@ -611,11 +661,13 @@ export class TicketsService {
    * Update a ticket. Today only `assigneeId` is supported: set it to a staff
    * user id, or `null` to unassign. The assignee is validated (exists and not
    * soft-deleted) before writing; there's no separate role check since only
-   * `admin`/`agent` users exist. Returns the fresh detail via `findOne`.
-   * Throws NotFoundException (404) for an unknown ticket, BadRequestException
-   * (400) for an invalid assignee. Unscoped (shared inbox), matching list().
+   * `admin`/`agent` users exist. Returns the fresh detail via loadTicketDetail().
+   * Access-scoped via assertAccess (agents may only update tickets assigned to
+   * them); throws NotFoundException (404) for an unknown or out-of-scope ticket,
+   * BadRequestException (400) for an invalid assignee.
    */
-  async update(id: number, input: UpdateTicketInput): Promise<TicketDetail> {
+  async update(id: number, input: UpdateTicketInput, caller: TicketCaller): Promise<TicketDetail> {
+    await this.assertAccess(id, caller);
     // `assigneeId` is read here (not just written below) so we can tell when
     // ownership moves away from a user and clear their unread notifications for
     // this ticket — they should stop seeing it in their bell once unassigned.
@@ -680,7 +732,7 @@ export class TicketsService {
       }
     }
 
-    return this.findOne(id);
+    return this.loadTicketDetail(id);
   }
 
   /**
