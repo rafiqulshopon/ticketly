@@ -63,11 +63,13 @@ export class TicketsController {
     @Session() session: UserSession<typeof auth>,
   ) {
     const query: ListTicketsQuery = listTicketsQuerySchema.parse(raw ?? {});
-    // The AI pipeline states (NEW/PROCESSING) are admin-only in the list; the
-    // service enforces that from the caller's role, so resolve it here.
+    // The list is scoped by the caller: agents see only their own assigned
+    // tickets, admins see the whole inbox. The service also hides the AI
+    // pipeline states (NEW/PROCESSING) from agents — both are driven by the
+    // role/id resolved here, so neither can be bypassed from the client.
     const role = session.user.role;
     const isAdmin = Array.isArray(role) ? role.includes("admin") : role === "admin";
-    return this.tickets.list(query, { isAdmin });
+    return this.tickets.list(query, { userId: session.user.id, isAdmin });
   }
 
   @ApiOperation({ summary: "List staff available for assignment" })

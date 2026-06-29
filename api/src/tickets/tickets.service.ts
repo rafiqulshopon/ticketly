@@ -17,6 +17,7 @@ import type { Ticket as TicketRow, TicketStatus } from "../generated/prisma/clie
 import { AiService } from "../ai/ai.service";
 import { OutboundMailService } from "../channels/email/outbound-mail.service";
 import { sanitizeEmailHtml } from "../common/sanitize-html";
+import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { SystemAgentService } from "../system-agent/system-agent.service";
 import {
@@ -84,6 +85,7 @@ export class TicketsService {
     private readonly queue: QueueService,
     private readonly systemAgent: SystemAgentService,
     private readonly mail: OutboundMailService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async create(
@@ -182,6 +184,18 @@ export class TicketsService {
             `Auto-resolve: could not move ticket ${ticket.id} to OPEN after enqueue failure — ${reopenErr instanceof Error ? reopenErr.message : reopenErr}`,
           );
         }
+      }
+
+      // Fan out a new-ticket notification to every admin (+ the human assignee,
+      // though new tickets start assigned to the AI). Same swallowed-error
+      // posture as the enqueues above: a notification failure never blocks or
+      // rolls back the ticket creation.
+      try {
+        await this.notifications.notifyNewTicket(ticket.id);
+      } catch (err) {
+        this.logger.warn(
+          `Notifications: new-ticket fan-out failed for ticket ${ticket.id} — ${err instanceof Error ? err.message : err}`,
+        );
       }
 
       return { ticket, created: true };
@@ -292,6 +306,16 @@ export class TicketsService {
         }
         throw err;
       }
+      // A customer reply on an existing thread — notify admins + the assignee so
+      // the bell surfaces that this ticket needs attention. Best-effort: a failure
+      // is logged, never propagated (the message is already persisted).
+      try {
+        await this.notifications.notifyNewMessage(parent.id);
+      } catch (err) {
+        this.logger.warn(
+          `Notifications: new-message fan-out failed for ticket ${parent.id} — ${err instanceof Error ? err.message : err}`,
+        );
+      }
       return { ticketId: parent.id, created: false, appended: true };
     }
 
@@ -313,16 +337,19 @@ export class TicketsService {
   /**
    * Ticket list, server-sorted by the requested column (default `createdAt`
    * DESC = newest first). `q` is a case-insensitive substring match on subject
-   * or requester email; status/category/priority/assigneeId are optional
-   * equality filters. `view` selects a dashboard bucket predicate (see
-   * listTicketsQuerySchema). All staff see all tickets here — no assignee
-   * scoping (shared inbox) — EXCEPT the AI pipeline states (NEW/PROCESSING):
-   * those are admin-only here. The caller's role drives that boundary, so it
-   * is enforced server-side regardless of the requested status/view.
+   * or requester email; status/category/priority are optional equality filters.
+   * `view` selects a dashboard bucket predicate (see listTicketsQuerySchema).
+   *
+   * Scoping: agents see only tickets assigned to them — enforced server-side
+   * from the caller's id, so it holds regardless of any client-supplied
+   * `assigneeId` (an agent can't peek at a colleague's queue). Admins see the
+   * whole shared inbox and may filter by any `assigneeId`. Both roles are still
+   * subject to the AI pipeline boundary: the NEW/PROCESSING states are
+   * admin-only here, driven by the caller's role.
    */
-  async list(opts: ListTicketsQuery, caller: { isAdmin: boolean }): Promise<TicketListResponse> {
+  async list(opts: ListTicketsQuery, caller: { userId: string; isAdmin: boolean }): Promise<TicketListResponse> {
     const { q, status, category, priority, assigneeId, view, sortBy, sortDir, page, pageSize } = opts;
-    const { isAdmin } = caller;
+    const { userId, isAdmin } = caller;
 
     // Build the Prisma `status` field condition. `undefined` means "no status
     // filter" (every status). Precedence: an explicit `status` wins; then a
@@ -379,7 +406,11 @@ export class TicketsService {
         : {}),
       ...(category ? { category } : {}),
       ...(priority ? { priority } : {}),
-      ...(assigneeId ? { assigneeId } : {}),
+      // Agents are scoped to their own assigned tickets; admins may filter by
+      // any assignee (or none for the whole inbox). For agents, their own id
+      // always wins over a client-supplied assigneeId so they can't reach a
+      // colleague's queue by hand-crafting the query string.
+      ...(isAdmin ? (assigneeId ? { assigneeId } : {}) : { assigneeId: userId }),
     };
 
     // Closed whitelist: only the four allowed columns reach Prisma's orderBy —
@@ -585,7 +616,13 @@ export class TicketsService {
    * (400) for an invalid assignee. Unscoped (shared inbox), matching list().
    */
   async update(id: number, input: UpdateTicketInput): Promise<TicketDetail> {
-    const ticket = await this.prisma.ticket.findUnique({ where: { id }, select: { id: true } });
+    // `assigneeId` is read here (not just written below) so we can tell when
+    // ownership moves away from a user and clear their unread notifications for
+    // this ticket — they should stop seeing it in their bell once unassigned.
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id },
+      select: { id: true, assigneeId: true },
+    });
     if (!ticket) throw new NotFoundException("Ticket not found");
 
     if (input.assigneeId !== undefined && input.assigneeId !== null) {
@@ -613,6 +650,36 @@ export class TicketsService {
     };
 
     await this.prisma.ticket.update({ where: { id }, data });
+
+    // Ownership-change side effects on the bell. `undefined` = assignee unchanged.
+    const newAssigneeId = input.assigneeId === undefined ? ticket.assigneeId : input.assigneeId;
+    const assigneeChanged = newAssigneeId !== ticket.assigneeId;
+
+    // Moving AWAY from a previous owner (unassign or reassign): clear their unread
+    // notifications for this ticket so it stops surfacing in their bell.
+    if (ticket.assigneeId && assigneeChanged) {
+      try {
+        await this.notifications.clearUnreadForTicket(ticket.assigneeId, id);
+      } catch (err) {
+        this.logger.warn(
+          `Notifications: could not clear unread for ticket ${id} on reassign — ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }
+
+    // Moving TO a new human owner: ping them that the ticket is now theirs. The AI
+    // agent is excluded inside notifyAssigned, so a (re)assignment back to the AI
+    // pipeline is a no-op.
+    if (newAssigneeId && assigneeChanged) {
+      try {
+        await this.notifications.notifyAssigned(id, newAssigneeId);
+      } catch (err) {
+        this.logger.warn(
+          `Notifications: assigned fan-out failed for ticket ${id} — ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }
+
     return this.findOne(id);
   }
 

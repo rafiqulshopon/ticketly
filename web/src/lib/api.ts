@@ -5,11 +5,13 @@ import type {
   CreateUserInput,
   DashboardStats,
   EditUserInput,
+  Notification,
   PolishReplyInput,
   PolishReplyResult,
   SummarizeTicketResult,
   TicketDetail,
   TicketListResponse,
+  UnreadCount,
   UpdateTicketInput,
   UserListItem,
   UserListResponse,
@@ -245,4 +247,29 @@ export async function updateUser(id: string, input: EditUserInput): Promise<User
  *  `ApiError(status)` (e.g. 400 admin can't be deleted, 404 not found). */
 export async function deleteUser(id: string): Promise<void> {
   return api<void>(`/users/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+/** The current user's notifications, newest first (server-capped). Pass an
+ *  AbortSignal so the caller can cancel when the popover closes. Throws
+ *  `ApiError(status)` (403 wrong role) on failure. */
+export async function getNotifications(config?: AxiosRequestConfig): Promise<Notification[]> {
+  return api<Notification[]>("/notifications", config);
+}
+
+/** Unread notification count for the bell badge. Lightweight endpoint meant to be
+ *  polled on an interval. Throws `ApiError(status)` on failure. */
+export async function getUnreadNotificationCount(config?: AxiosRequestConfig): Promise<UnreadCount> {
+  return api<UnreadCount>("/notifications/unread-count", config);
+}
+
+/** Mark a single notification as read. No response body (204). Throws
+ *  `ApiError(status)` (404 when the id isn't the caller's) on failure. */
+export async function markNotificationRead(id: string, config?: AxiosRequestConfig): Promise<void> {
+  return api<void>(`/notifications/${encodeURIComponent(id)}/read`, { method: "PATCH", ...config });
+}
+
+/** Mark every unread notification for the caller as read. No response body (204).
+ *  Throws `ApiError(status)` on failure. */
+export async function markAllNotificationsRead(config?: AxiosRequestConfig): Promise<void> {
+  return api<void>("/notifications/read-all", { method: "POST", ...config });
 }

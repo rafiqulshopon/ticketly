@@ -10,6 +10,7 @@ import { QueueModule } from "./queue/queue.module";
 import { SystemAgentModule } from "./system-agent/system-agent.module";
 import { EmailChannelModule } from "./channels/email/email.module";
 import { DashboardModule } from "./dashboard/dashboard.module";
+import { NotificationsModule } from "./notifications/notifications.module";
 import { TicketsModule } from "./tickets/tickets.module";
 import { UsersModule } from "./users/users.module";
 import { auth } from "./auth/auth.config";
@@ -30,6 +31,7 @@ import { auth } from "./auth/auth.config";
     UsersModule,
     TicketsModule,
     DashboardModule,
+    NotificationsModule,
     EmailChannelModule,
     BetterAuthModule.forRoot({
       auth,

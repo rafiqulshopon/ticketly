@@ -4,6 +4,7 @@ import { Inbox, LayoutDashboard, LogOut, Users } from "lucide-react";
 import { signOut, useSession } from "@/lib/auth";
 import { Avatar, AvatarFallback, Button } from "@/components/ui";
 import { Brand } from "@/components/brand/logo";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -50,10 +51,11 @@ export function AppLayout() {
       <div className="flex">
         {/* Sidebar — persistent workspace rail on large screens. */}
         <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r bg-card/40 lg:flex">
-          <div className="flex h-16 items-center border-b px-5">
+          <div className="flex h-16 items-center justify-between border-b px-5">
             <Link to="/">
               <Brand />
             </Link>
+            {user && <NotificationBell align="start" />}
           </div>
           <nav className="flex-1 space-y-1 p-3">
             {navItems.map((item) => (
@@ -91,10 +93,11 @@ export function AppLayout() {
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Mobile top bar + nav (sidebar collapses up top below lg). */}
           <header className="sticky top-0 z-20 border-b bg-background/80 backdrop-blur lg:hidden">
-            <div className="flex h-14 items-center justify-between px-4">
-              <Link to="/">
+            <div className="flex h-14 items-center gap-1 px-4">
+              <Link to="/" className="mr-auto">
                 <Brand />
               </Link>
+              {user && <NotificationBell align="end" />}
               {user ? (
                 <Button
                   variant="ghost"
