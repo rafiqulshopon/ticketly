@@ -53,19 +53,26 @@ function groupKey(m: TicketMessage): string {
 /** Conversation thread for a ticket — the list of inbound/outbound messages. */
 export function TicketMessages({ messages }: { messages: TicketMessage[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const prevLength = useRef(messages.length);
+  const lastFirstId = useRef<string | undefined>(undefined);
+  const lastLength = useRef(0);
+  const firstId = messages[0]?.id;
 
-  // Smooth-scroll to the newest message only when one is ADDED (not on initial
-  // mount), so sending a reply brings it into view instead of leaving it below the
-  // fold. The optimistic reply (added by useOptimistic in TicketDetail) bumps the
-  // length, so this fires the moment the user hits Send.
+  // Smooth-scroll to the newest message when ENTERING the thread — initial mount
+  // OR navigating to a different ticket — and whenever a message is ADDED (a reply
+  // via useOptimistic in TicketDetail, or an inbound message over realtime). We
+  // deliberately don't scroll otherwise, so reading an existing thread doesn't snap
+  // to the bottom. `firstId` doubles as a stable thread identity: this component
+  // doesn't remount on a ticket change (no `key` on it), so length alone would miss
+  // navigating between two tickets that happen to have the same message count.
   useEffect(() => {
     const el = scrollRef.current;
-    if (el && messages.length > prevLength.current) {
+    if (!el) return;
+    if (firstId !== lastFirstId.current || messages.length > lastLength.current) {
       el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
     }
-    prevLength.current = messages.length;
-  }, [messages.length]);
+    lastFirstId.current = firstId;
+    lastLength.current = messages.length;
+  }, [firstId, messages.length]);
 
   return (
     <Card>
