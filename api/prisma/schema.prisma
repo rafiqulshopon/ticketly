@@ -36,6 +36,7 @@ model User {
   sentMessages    Message[]
   drafts          Draft[]
   notifications   Notification[]
+  activitiesAuthored TicketActivity[] @relation("ActivityActors")
 }
 
 model Session {
@@ -116,6 +117,20 @@ enum MessageSenderType {
   customer
 }
 
+// One entry in a ticket's activity log (timeline). Mirrors the shared
+// `ticketActivityTypeSchema`; keep the two in sync (the codebase convention for
+// every closed enum set).
+enum TicketActivityType {
+  ticket_created
+  customer_replied
+  agent_replied
+  ai_replied
+  status_changed
+  priority_changed
+  category_changed
+  assignee_changed
+}
+
 model Ticket {
   id             Int            @id @default(autoincrement())
   subject        String
@@ -130,6 +145,7 @@ model Ticket {
   messages       Message[]
   drafts         Draft[]
   notifications  Notification[]
+  activities     TicketActivity[]
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   resolvedAt     DateTime? // Set when status first reaches RESOLVED/CLOSED; null until then.
@@ -230,4 +246,33 @@ model Notification {
   @@index([userId, readAt])
   @@index([ticketId])
   @@map("notifications")
+}
+
+// One entry in a ticket's lifecycle timeline — created when it arrived, each
+// reply (customer / agent / AI), and every status / priority / category /
+// assignee change. Written inline at each mutation site (best-effort, never
+// rolls back the real write) and read newest-first on the detail page.
+//
+// `actorUserId` is the staff user who caused the event (null for system / AI /
+// customer events). It carries no `onDelete` (default NoAction) so a deleted
+// agent's past actions survive — the `actorName` snapshot keeps the feed
+// renderable without a join. `changeField`/`changeFrom`/`changeTo` are populated
+// only for `*_changed` events; null otherwise.
+model TicketActivity {
+  id          String             @id @default(uuid())
+  ticketId    Int
+  ticket      Ticket             @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  type        TicketActivityType
+  actorUserId String?
+  actor       User?              @relation("ActivityActors", fields: [actorUserId], references: [id])
+  actorName   String? // snapshot so the feed renders without a join
+  changeField String? // "status" | "priority" | "category" | "assignee"
+  changeFrom  String?
+  changeTo    String?
+  createdAt   DateTime           @default(now())
+
+  // The feed query: a ticket's activity, newest-first, scoped by ticketId.
+  @@index([ticketId, createdAt])
+  @@index([actorUserId])
+  @@map("ticket_activities")
 }

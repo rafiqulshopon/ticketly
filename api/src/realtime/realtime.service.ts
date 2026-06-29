@@ -1,5 +1,5 @@
 import { Injectable, Logger, type MessageEvent, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
-import type { TicketMessage } from "@ticketly/shared";
+import type { TicketActivityItem, TicketMessage } from "@ticketly/shared";
 import { Observable, Subject } from "rxjs";
 import { finalize } from "rxjs/operators";
 import { NotificationsService } from "../notifications/notifications.service";
@@ -87,6 +87,20 @@ export class RealtimeService implements OnModuleInit, OnModuleDestroy {
         ticketSubject: ticket.subject,
         requesterName: ticket.requesterName,
       });
+    }
+  }
+
+  /** Push a new activity-log entry to everyone who may see the ticket, so the
+   *  open Activity tab prepends it live (replies + property changes alike). The
+   *  audience is resolved exactly like `publishTicketReply` — admins ∪ the
+   *  assignee, minus the AI agent — so the "who may see this ticket" rule stays
+   *  in one place. The full item is sent so the client needs no refetch. */
+  async publishTicketActivity(ticketId: number, activity: TicketActivityItem): Promise<void> {
+    const ticket = await this.ticketMeta(ticketId);
+    if (!ticket) return;
+    const recipientIds = await this.notifications.recipientUserIds(ticket.assigneeId);
+    for (const userId of recipientIds) {
+      this.emit(userId, "ticket_activity", { ticketId, activity });
     }
   }
 

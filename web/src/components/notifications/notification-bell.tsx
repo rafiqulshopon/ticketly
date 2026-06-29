@@ -18,6 +18,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from "@/lib/api";
+import { relativeTime } from "@/lib/format";
 
 /**
  * The navbar bell: a live unread badge + a popover feed. The unread count is
@@ -202,19 +203,4 @@ function NotificationItem({ n, onSelect }: { n: Notification; onSelect: () => vo
 
 function CenteredNote({ text }: { text: string }) {
   return <p className="px-3 py-8 text-center text-sm text-muted-foreground">{text}</p>;
-}
-
-/** Compact "x ago" for the feed — fine-grained for recent, absolute for old. */
-function relativeTime(iso: string): string {
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return "";
-  const diff = Date.now() - then;
-  if (diff < 60_000) return "just now";
-  const min = Math.round(diff / 60_000);
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.round(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  const day = Math.round(hr / 24);
-  if (day < 7) return `${day}d ago`;
-  return new Date(iso).toLocaleDateString();
 }

@@ -18,6 +18,7 @@
     "db:migrate": "npm run prisma:migrate --workspace @ticketly/api",
     "db:studio": "npm run prisma:studio --workspace @ticketly/api",
     "db:seed": "npm run db:seed --workspace @ticketly/api",
+    "db:backfill-activity": "npm run db:backfill-activity --workspace @ticketly/api",
     "lint": "npm run lint --workspaces --if-present",
     "lint:fix": "npm run lint --workspaces --if-present -- --fix"
   },

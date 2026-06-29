@@ -9,6 +9,7 @@ import type {
   PolishReplyInput,
   PolishReplyResult,
   SummarizeTicketResult,
+  TicketActivityItem,
   TicketDetail,
   TicketListResponse,
   UnreadCount,
@@ -152,6 +153,17 @@ export async function getTickets(
  *  navigating away. */
 export async function getTicket(id: number, config?: AxiosRequestConfig): Promise<TicketDetail> {
   return api<TicketDetail>(`/tickets/${encodeURIComponent(id)}`, config);
+}
+
+/** A ticket's activity timeline, newest first (server-capped). Throws
+ *  `ApiError(status)` (404 when the id is unknown or out of scope for the caller)
+ *  on failure. Pass an AbortSignal so the caller can cancel when navigating away
+ *  or switching tabs. */
+export async function getTicketActivity(
+  id: number,
+  config?: AxiosRequestConfig,
+): Promise<TicketActivityItem[]> {
+  return api<TicketActivityItem[]>(`/tickets/${encodeURIComponent(id)}/activity`, config);
 }
 
 /** Dashboard metrics (admin only). Throws `ApiError(status)` (403 for non-admins)

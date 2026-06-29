@@ -23,13 +23,13 @@ async function main() {
 
   // Refuse to provision an admin with a weak/placeholder password. The bootstrap
   // admin email is a known target (see sign-in rate limiting in auth.config.ts);
-  // forcing a strong password here closes the "operator forgets to rotate" gap.
-  // (Better Auth's own policy only enforces ≥8 chars, which lets the example
-  // default through — so we check explicitly.)
+  // blocking the known example defaults here closes the "operator forgets to
+  // rotate" gap. The 8-char floor matches the app-wide minimum (the shared
+  // `passwordRule` and Better Auth's own policy both enforce ≥8).
   const KNOWN_DEFAULTS = ["change-me-please", "changeme", "password", "admin"];
-  if (KNOWN_DEFAULTS.includes(password) || password.length < 12) {
+  if (KNOWN_DEFAULTS.includes(password) || password.length < 8) {
     throw new Error(
-      "Seed: SEED_ADMIN_PASSWORD is too weak — use ≥12 characters and not a known " +
+      "Seed: SEED_ADMIN_PASSWORD is too weak — use ≥8 characters and not a known " +
         "default. Set a strong value before running `npm run db:seed`.",
     );
   }

@@ -12,6 +12,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
+    "db:backfill-activity": "tsx prisma/backfill-activity.ts",
     "lint": "eslint ."
   },
   "dependencies": {

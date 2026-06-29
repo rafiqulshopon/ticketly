@@ -88,6 +88,17 @@ export class TicketsController {
     return this.tickets.listAssignees();
   }
 
+  @ApiOperation({ summary: "List activity log entries for a ticket (newest first)" })
+  @Get(":id/activity")
+  listActivity(
+    @Param("id") id: string,
+    @Session() session: UserSession<typeof auth>,
+  ) {
+    // Access-scoped inside the service (assertAccess): agents get 404 for tickets
+    // not assigned to them, same as findOne.
+    return this.tickets.listActivity(Number(id), toCaller(session));
+  }
+
   @ApiOperation({ summary: "Get a single ticket (metadata only)" })
   @Get(":id")
   findOne(

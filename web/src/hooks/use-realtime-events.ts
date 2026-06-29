@@ -1,7 +1,12 @@
 import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { realtimeEventSchema, type RealtimeEvent, type TicketDetail } from "@ticketly/shared";
+import {
+  realtimeEventSchema,
+  type RealtimeEvent,
+  type TicketActivityItem,
+  type TicketDetail,
+} from "@ticketly/shared";
 import { toast } from "@/components/ui";
 
 /** Truncate a message body for a toast preview (single line, capped length). */
@@ -70,6 +75,11 @@ export function useRealtimeEvents(): void {
             messages: [...cached.messages, message],
           });
         }
+        // A customer reply may have reopened the ticket server-side
+        // (Resolved/Closed/Awaiting_Student → Open); refetch so the status badge
+        // + properties reflect it. The optimistic append above stays for instant
+        // display — the refetch reconciles (same message id, no duplication).
+        queryClient.invalidateQueries({ queryKey: ["ticket", ticketId] });
       } else {
         toast(`New reply on "${ticketSubject}"`, {
           description: `${requesterName ?? message.fromEmail}: ${preview(message.bodyText)}`,
@@ -90,6 +100,20 @@ export function useRealtimeEvents(): void {
       });
       queryClient.invalidateQueries({ queryKey: ["tickets"] });
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    });
+
+    es.addEventListener("ticket_activity", (e) => {
+      const event = parseEvent(e.data);
+      if (event?.type !== "ticket_activity") return;
+      const { ticketId, activity } = event;
+      // Only the open ticket matters: prepend the new row to the Activity tab's
+      // cache (dedupe by id) so it appears live. No toast — activity is a
+      // secondary signal, and if the tab isn't open the next open fetches fresh.
+      if (pathnameRef.current !== `/tickets/${ticketId}`) return;
+      const cached = queryClient.getQueryData<TicketActivityItem[]>(["ticket-activity", ticketId]);
+      if (cached && !cached.some((a) => a.id === activity.id)) {
+        queryClient.setQueryData<TicketActivityItem[]>(["ticket-activity", ticketId], [activity, ...cached]);
+      }
     });
 
     // "ping" frames are the SSE keep-alive — intentionally unhandled.

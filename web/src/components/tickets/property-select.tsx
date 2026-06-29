@@ -74,6 +74,9 @@ export function PropertySelect({
       // between clearing the overlay and the refetched prop arriving.
       queryClient.setQueryData(["ticket", ticketId], updated);
       queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      // Refresh the activity timeline so the change shows even before an SSE push
+      // lands (or if the Activity tab hasn't been opened yet).
+      queryClient.invalidateQueries({ queryKey: ["ticket-activity", ticketId] });
     } catch (err) {
       setErrorMessage(toErrorMessage(err));
     } finally {

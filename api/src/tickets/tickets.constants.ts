@@ -13,3 +13,9 @@ export const SYSTEM_AGENT_EMAIL = "ai@ticketly.local";
  *  Shared by the dashboard stats and the ticket-list `view` filter so the two
  *  can't drift apart. */
 export const RESOLVED_STATUSES: TicketStatus[] = ["RESOLVED", "CLOSED"];
+
+/** Statuses a customer reply should reopen from → OPEN. Resolved/Closed are
+ *  terminal (the follow-up invalidates "done"); Awaiting_Student means we were
+ *  waiting on the student, who just replied. Open is already active; New/
+ *  Processing belong to the AI pipeline and are left alone. */
+export const REOPENABLE_STATUSES: TicketStatus[] = ["AWAITING_STUDENT", "RESOLVED", "CLOSED"];

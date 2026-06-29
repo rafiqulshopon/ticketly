@@ -1,7 +1,9 @@
 import { Injectable, Logger, type OnApplicationBootstrap } from "@nestjs/common";
 import type { Job } from "pg-boss";
+import { ActivityLogsService } from "../activity-logs/activity-logs.service";
 import { AiService } from "../ai/ai.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { SystemAgentService } from "../system-agent/system-agent.service";
 import {
   CLASSIFY_TICKET_QUEUE,
   type ClassifyTicketJobData,
@@ -31,6 +33,8 @@ export class ClassifyTicketConsumer implements OnApplicationBootstrap {
     private readonly queue: QueueService,
     private readonly ai: AiService,
     private readonly prisma: PrismaService,
+    private readonly systemAgent: SystemAgentService,
+    private readonly activityLogs: ActivityLogsService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -56,7 +60,28 @@ export class ClassifyTicketConsumer implements OnApplicationBootstrap {
       this.logger.warn(`Classify: ticket ${ticketId} (job ${jobId}) returned no usable category — leaving it uncategorized.`);
       return;
     }
+    // Read the prior category so the activity log can show before→after (null =
+    // uncategorized). Skipped when the category is unchanged.
+    const before = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: { category: true },
+    });
     await this.prisma.ticket.update({ where: { id: ticketId }, data: { category } });
     this.logger.log(`Classify: ticket ${ticketId} → ${category}.`);
+    if (before && before.category !== category) {
+      // Attribute the classification to the system AI agent (null if unseeded).
+      // Best-effort: the category write is already committed.
+      try {
+        const aiAgentId = await this.systemAgent.getAiAgentId();
+        await this.activityLogs.record(ticketId, "category_changed", {
+          actorUserId: aiAgentId,
+          change: { field: "category", from: before.category, to: category },
+        });
+      } catch (err) {
+        this.logger.warn(
+          `Activity: category_changed log failed for ticket ${ticketId} — ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }
   }
 }

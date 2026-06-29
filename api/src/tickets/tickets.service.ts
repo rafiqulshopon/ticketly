@@ -8,12 +8,15 @@ import type {
   PolishReplyResult,
   SummarizeTicketResult,
   Ticket,
+  TicketActivityItem,
+  TicketActivityType,
   TicketDetail,
   TicketListItem,
   TicketListResponse,
   UpdateTicketInput,
 } from "@ticketly/shared";
 import type { Message as MessageRow, Ticket as TicketRow, TicketStatus } from "../generated/prisma/client";
+import { ActivityLogsService, type ActivityChange } from "../activity-logs/activity-logs.service";
 import { AiService } from "../ai/ai.service";
 import { OutboundMailService } from "../channels/email/outbound-mail.service";
 import { sanitizeEmailHtml } from "../common/sanitize-html";
@@ -30,7 +33,7 @@ import {
   type ClassifyTicketJobData,
 } from "../queue/queue.constants";
 import { QueueService } from "../queue/queue.service";
-import { RESOLVED_STATUSES, SYSTEM_AGENT_EMAIL } from "./tickets.constants";
+import { REOPENABLE_STATUSES, RESOLVED_STATUSES, SYSTEM_AGENT_EMAIL } from "./tickets.constants";
 
 /**
  * Placeholder destination for the first inbound message on a ticket. There is no
@@ -94,6 +97,7 @@ export class TicketsService {
     private readonly mail: OutboundMailService,
     private readonly notifications: NotificationsService,
     private readonly realtime: RealtimeService,
+    private readonly activityLogs: ActivityLogsService,
   ) {}
 
   async create(
@@ -217,6 +221,17 @@ export class TicketsService {
         );
       }
 
+      // Record the creation on the activity timeline. No actor — a new ticket is
+      // a system event (an inbound email arriving). Best-effort, same posture as
+      // the fan-out above; the ticket is already persisted.
+      try {
+        await this.activityLogs.record(ticket.id, "ticket_created");
+      } catch (err) {
+        this.logger.warn(
+          `Activity: ticket_created log failed for ticket ${ticket.id} — ${err instanceof Error ? err.message : err}`,
+        );
+      }
+
       return { ticket, created: true };
     } catch (err) {
       // P2002 (unique violation) on messageId under a concurrent retry race:
@@ -242,12 +257,15 @@ export class TicketsService {
    *
    * Threading is gated on requesterEmail equality, so a forged In-Reply-To can't
    * inject a message into someone else's ticket — a mismatched requester falls
-   * through to a new ticket. Append does NOT change ticket status or re-run AI
-   * (reopen / re-classify are separate follow-ups). Idempotency is on
-   * Message.messageId (unique), which covers both the originating message
-   * create() wrote and any appended reply, so a Resend retry is always a no-op;
-   * the append path additionally reconciles the unique-constraint race under
-   * concurrent retries by treating P2002 as "already appended".
+   * through to a new ticket. Append reopens the ticket when it isn't already
+   * actionable: a reply on a Resolved/Closed/Awaiting_Student ticket flips it to
+   * OPEN (the follow-up needs an agent) inside the same transaction as the
+   * message write. It does NOT re-run AI classify/auto-resolve on reopen.
+   * Idempotency is on Message.messageId (unique), which covers both the
+   * originating message create() wrote and any appended reply, so a Resend retry
+   * is always a no-op; the append path additionally reconciles the
+   * unique-constraint race under concurrent retries by treating P2002 as
+   * "already appended".
    */
   async ingestInbound(input: IngestInboundInput): Promise<IngestResult> {
     const messageId = input.messageId ?? null;
@@ -267,12 +285,12 @@ export class TicketsService {
     //    headers Resend's inbound fetch omits. Header-based lookup stays as a
     //    fallback for old tickets / the dev webhook. Either way the requester-email
     //    gate (step 3) still applies, so a cross-ticket reply can't inject.
-    let parent: { id: number; requesterEmail: string } | null = null;
+    let parent: { id: number; requesterEmail: string; status: TicketStatus } | null = null;
 
     if (input.routingTicketId) {
       parent = await this.prisma.ticket.findUnique({
         where: { id: input.routingTicketId },
-        select: { id: true, requesterEmail: true },
+        select: { id: true, requesterEmail: true, status: true },
       });
     }
 
@@ -288,14 +306,14 @@ export class TicketsService {
         const replyTarget = await this.prisma.message.findFirst({
           where: { messageId: { in: uniqueCandidateIds } },
           orderBy: { createdAt: "desc" },
-          select: { ticket: { select: { id: true, requesterEmail: true } } },
+          select: { ticket: { select: { id: true, requesterEmail: true, status: true } } },
         });
         parent = replyTarget?.ticket ?? null;
         if (!parent) {
           parent = await this.prisma.ticket.findFirst({
             where: { messageId: { in: uniqueCandidateIds } },
             orderBy: { createdAt: "desc" },
-            select: { id: true, requesterEmail: true },
+            select: { id: true, requesterEmail: true, status: true },
           });
         }
       }
@@ -303,22 +321,45 @@ export class TicketsService {
 
     // 3. Append to the thread iff the reply is from the ticket's own requester.
     if (parent && parent.requesterEmail === input.requesterEmail) {
+      // A reply on a non-actionable ticket reopens it to OPEN so the follow-up
+      // surfaces in the inbox: Resolved/Closed = was done, Awaiting_Student = we
+      // were waiting on the student (who just replied). Open/New/Processing stay.
+      const reopenTo: TicketStatus | null = REOPENABLE_STATUSES.includes(parent.status)
+        ? "OPEN"
+        : null;
       let msg: MessageRow;
+      let reopened = false;
       try {
-        msg = await this.prisma.message.create({
-          data: {
-            ticketId: parent.id,
-            direction: "inbound",
-            senderType: "customer",
-            fromEmail: input.requesterEmail,
-            toEmail: SUPPORT_INBOUND_ADDRESS,
-            subject: input.subject,
-            bodyText: input.bodyText,
-            bodyHtml: sanitizeEmailHtml(input.bodyHtml),
-            messageId,
-            inReplyTo: input.inReplyTo ?? null,
-          },
+        // Append the message + the reopen atomically: a half-applied reopen
+        // (message saved, ticket still Closed) is exactly the gap this fixes.
+        const created = await this.prisma.$transaction(async (tx) => {
+          const message = await tx.message.create({
+            data: {
+              ticketId: parent.id,
+              direction: "inbound",
+              senderType: "customer",
+              fromEmail: input.requesterEmail,
+              toEmail: SUPPORT_INBOUND_ADDRESS,
+              subject: input.subject,
+              bodyText: input.bodyText,
+              bodyHtml: sanitizeEmailHtml(input.bodyHtml),
+              messageId,
+              inReplyTo: input.inReplyTo ?? null,
+            },
+          });
+          // Guard on the status we read so a concurrent human change isn't clobbered
+          // (same posture as the auto-resolve consumer); the matched count tells us
+          // whether the reopen applied, so the activity log reflects reality.
+          if (reopenTo) {
+            const updated = await tx.ticket.updateMany({
+              where: { id: parent.id, status: parent.status },
+              data: { status: reopenTo },
+            });
+            reopened = updated.count > 0;
+          }
+          return message;
         });
+        msg = created;
       } catch (err) {
         // Concurrent retry race: another worker appended this message first.
         if (messageId && isUniqueViolation(err)) {
@@ -357,6 +398,28 @@ export class TicketsService {
         this.logger.warn(
           `Realtime: reply push failed for ticket ${parent.id} — ${err instanceof Error ? err.message : err}`,
         );
+      }
+      // Record the customer reply on the activity timeline. No actor — it's an
+      // external inbound message. Best-effort; the message is already persisted.
+      try {
+        await this.activityLogs.record(parent.id, "customer_replied");
+      } catch (err) {
+        this.logger.warn(
+          `Activity: customer_replied log failed for ticket ${parent.id} — ${err instanceof Error ? err.message : err}`,
+        );
+      }
+      // Record the reopen (only if it applied). No actor — it's a system
+      // consequence of the customer reply. Best-effort, same posture as above.
+      if (reopened && reopenTo) {
+        try {
+          await this.activityLogs.record(parent.id, "status_changed", {
+            change: { field: "status", from: parent.status, to: reopenTo },
+          });
+        } catch (err) {
+          this.logger.warn(
+            `Activity: status_changed (reopen) log failed for ticket ${parent.id} — ${err instanceof Error ? err.message : err}`,
+          );
+        }
       }
       return { ticketId: parent.id, created: false, appended: true };
     }
@@ -509,6 +572,16 @@ export class TicketsService {
   }
 
   /**
+   * A ticket's activity timeline (newest first, server-capped). Access-scoped via
+   * assertAccess — agents get 404 for tickets not assigned to them, exactly like
+   * findOne. Delegates the read to ActivityLogsService.
+   */
+  async listActivity(id: number, caller: TicketCaller): Promise<TicketActivityItem[]> {
+    await this.assertAccess(id, caller);
+    return this.activityLogs.listForTicket(id);
+  }
+
+  /**
    * Unchecked detail loader — the body of the old findOne(). Public per-ticket
    * methods assert access up front (via assertAccess) then call this for the
    * detail/context, so an operation that reassigns a ticket mid-request (e.g.
@@ -630,6 +703,23 @@ export class TicketsService {
       }
     });
 
+    // Record the reply (and the OPEN→AWAITING_STUDENT flip, when it happened) on
+    // the activity timeline. The signed-in agent is the actor. Best-effort: the
+    // reply is already committed, so a logging failure is logged, never propagated.
+    try {
+      await this.activityLogs.record(ticketId, "agent_replied", { actorUserId: senderId });
+      if (nextStatus) {
+        await this.activityLogs.record(ticketId, "status_changed", {
+          actorUserId: senderId,
+          change: { field: "status", from: ticket.status, to: nextStatus },
+        });
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Activity: agent_replied log failed for ticket ${ticketId} — ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
     // Best-effort outbound email — never throws; the in-thread reply is already
     // persisted, so a Resend outage degrades to "reply saved, email not sent"
     // (logged) rather than failing the agent's request.
@@ -708,12 +798,13 @@ export class TicketsService {
    */
   async update(id: number, input: UpdateTicketInput, caller: TicketCaller): Promise<TicketDetail> {
     await this.assertAccess(id, caller);
-    // `assigneeId` is read here (not just written below) so we can tell when
-    // ownership moves away from a user and clear their unread notifications for
-    // this ticket — they should stop seeing it in their bell once unassigned.
+    // The pre-edit row is read here so we can (a) tell when ownership moves away
+    // from a user and clear their unread notifications for this ticket, and (b)
+    // capture before→after for the activity log on every changed field. Only the
+    // four editable scalars are selected.
     const ticket = await this.prisma.ticket.findUnique({
       where: { id },
-      select: { id: true, assigneeId: true },
+      select: { id: true, assigneeId: true, status: true, priority: true, category: true },
     });
     if (!ticket) throw new NotFoundException("Ticket not found");
 
@@ -742,6 +833,37 @@ export class TicketsService {
     };
 
     await this.prisma.ticket.update({ where: { id }, data });
+
+    // Record one activity event per field that actually changed (undefined input
+    // = unchanged). For assignee we store display names so the feed renders
+    // join-free; the other fields carry their raw enum value (the UI labels them).
+    const changes: Array<{ type: TicketActivityType; change: ActivityChange }> = [];
+    if (input.status !== undefined && input.status !== ticket.status) {
+      changes.push({ type: "status_changed", change: { field: "status", from: ticket.status, to: input.status } });
+    }
+    if (input.priority !== undefined && input.priority !== ticket.priority) {
+      changes.push({ type: "priority_changed", change: { field: "priority", from: ticket.priority, to: input.priority } });
+    }
+    // `category` is nullable (null = uncategorized): compare against the stored value directly.
+    if (input.category !== undefined && input.category !== ticket.category) {
+      changes.push({ type: "category_changed", change: { field: "category", from: ticket.category, to: input.category } });
+    }
+    if (input.assigneeId !== undefined && input.assigneeId !== ticket.assigneeId) {
+      const [fromName, toName] = await Promise.all([
+        this.assigneeDisplayName(ticket.assigneeId),
+        this.assigneeDisplayName(input.assigneeId ?? null),
+      ]);
+      changes.push({ type: "assignee_changed", change: { field: "assignee", from: fromName, to: toName } });
+    }
+    for (const c of changes) {
+      try {
+        await this.activityLogs.record(id, c.type, { actorUserId: caller.userId, change: c.change });
+      } catch (err) {
+        this.logger.warn(
+          `Activity: ${c.type} log failed for ticket ${id} — ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }
 
     // Ownership-change side effects on the bell. `undefined` = assignee unchanged.
     const newAssigneeId = input.assigneeId === undefined ? ticket.assigneeId : input.assigneeId;
@@ -794,6 +916,17 @@ export class TicketsService {
       // `userRoleEnum` (`AssigneeOption.role`), so no cast is needed.
       role: u.role,
     }));
+  }
+
+  /**
+   * A user's display name for the activity log's assignee change snapshots, or
+   * "(unassigned)" for null. A missing/soft-deleted user resolves to a fallback
+   * so the before→after row still reads sensibly.
+   */
+  private async assigneeDisplayName(userId: string | null): Promise<string> {
+    if (!userId) return "(unassigned)";
+    const u = await this.prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+    return u?.name ?? "(deleted user)";
   }
 
   /** Map a Prisma `Ticket` row to the wire shape (timestamps → ISO strings). */

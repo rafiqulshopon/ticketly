@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ticketActivitySchema } from "./activity";
 import { ticketMessageSchema } from "./ticket";
 
 /**
@@ -26,6 +27,14 @@ export const realtimeEventSchema = z.discriminatedUnion("type", [
     ticketSubject: z.string(),
     requesterName: z.string().nullable(),
   }),
+  z.object({
+    type: z.literal("ticket_activity"),
+    ticketId: z.number(),
+    // The full activity item so the open Activity tab can prepend it live without
+    // a refetch. Pushed for every recorded event (replies + property changes) so
+    // server-side events like an AI auto-resolve surface instantly.
+    activity: ticketActivitySchema,
+  }),
 ]);
 
 export type RealtimeEvent = z.infer<typeof realtimeEventSchema>;
@@ -35,3 +44,6 @@ export type NewMessageEvent = Extract<RealtimeEvent, { type: "new_message" }>;
 
 /** A `new_ticket` event. */
 export type NewTicketEvent = Extract<RealtimeEvent, { type: "new_ticket" }>;
+
+/** A `ticket_activity` event. */
+export type TicketActivityEvent = Extract<RealtimeEvent, { type: "ticket_activity" }>;

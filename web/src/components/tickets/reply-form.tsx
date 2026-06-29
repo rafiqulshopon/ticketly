@@ -137,6 +137,9 @@ export function ReplyForm({
         const updated = await mutation.mutateAsync(values);
         queryClient.setQueryData(["ticket", ticket.id], updated);
         queryClient.invalidateQueries({ queryKey: ["tickets"] });
+        // Refresh the activity timeline (the reply + any status flip). The SSE
+        // push covers the open-tab case; this covers it before one lands.
+        queryClient.invalidateQueries({ queryKey: ["ticket-activity", ticket.id] });
         reset({ bodyText: "" });
         toast.success("Reply sent.");
       } catch (err) {

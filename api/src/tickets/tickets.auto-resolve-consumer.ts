@@ -1,6 +1,7 @@
 import { Injectable, Logger, type OnApplicationBootstrap } from "@nestjs/common";
 import type { Job } from "pg-boss";
 import type { TicketStatus } from "../generated/prisma/client";
+import { ActivityLogsService } from "../activity-logs/activity-logs.service";
 import { AiService } from "../ai/ai.service";
 import { OutboundMailService } from "../channels/email/outbound-mail.service";
 import { PrismaService } from "../prisma/prisma.service";
@@ -42,6 +43,7 @@ export class AutoResolveTicketConsumer implements OnApplicationBootstrap {
     private readonly prisma: PrismaService,
     private readonly systemAgent: SystemAgentService,
     private readonly mail: OutboundMailService,
+    private readonly activityLogs: ActivityLogsService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -157,6 +159,20 @@ export class AutoResolveTicketConsumer implements OnApplicationBootstrap {
           inReplyTo: ticket.messageId ?? undefined,
           references: ticket.messageId ?? undefined,
         });
+        // Record the AI reply + resolution on the activity timeline. The AI agent
+        // is the actor (null only if it isn't seeded). Best-effort — the resolve
+        // + reply are already committed, so a logging failure just logs.
+        try {
+          await this.activityLogs.record(ticketId, "ai_replied", { actorUserId: aiAgentId });
+          await this.activityLogs.record(ticketId, "status_changed", {
+            actorUserId: aiAgentId,
+            change: { field: "status", from: "PROCESSING", to: "RESOLVED" },
+          });
+        } catch (err) {
+          this.logger.warn(
+            `Activity: ai_replied/status_changed log failed for ticket ${ticketId} — ${err instanceof Error ? err.message : err}`,
+          );
+        }
       }
     } else {
       await this.transition(ticketId, "OPEN");
@@ -169,14 +185,41 @@ export class AutoResolveTicketConsumer implements OnApplicationBootstrap {
   /** Move a PROCESSING ticket to `status` and release it to the shared inbox by
    *  unassigning the AI agent. No-op if the ticket was changed out from under us
    *  (e.g. a human grabbed it mid-flight and changed its status). Only ever called
-   *  with OPEN. */
+   *  with OPEN. When it applies, records the escalation on the activity timeline
+   *  (status PROCESSING→OPEN + the AI releasing ownership). */
   private async transition(ticketId: number, status: Exclude<TicketStatus, "PROCESSING">): Promise<void> {
+    // Snapshot the current owner for the assignee-change log before unassigning.
+    const before = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: { assigneeId: true },
+    });
     const updated = await this.prisma.ticket.updateMany({
       where: { id: ticketId, status: "PROCESSING" },
       data: { status, assigneeId: null },
     });
     if (updated.count === 0) {
       this.logger.log(`Auto-resolve: ticket ${ticketId} left PROCESSING — not forcing ${status}.`);
+      return;
     }
+    const fromName = before?.assigneeId ? await this.assigneeDisplayName(before.assigneeId) : "(unassigned)";
+    try {
+      await this.activityLogs.record(ticketId, "status_changed", {
+        change: { field: "status", from: "PROCESSING", to: status },
+      });
+      await this.activityLogs.record(ticketId, "assignee_changed", {
+        change: { field: "assignee", from: fromName, to: "(unassigned)" },
+      });
+    } catch (err) {
+      this.logger.warn(
+        `Activity: transition log failed for ticket ${ticketId} — ${err instanceof Error ? err.message : err}`,
+      );
+    }
+  }
+
+  /** A user's display name for the activity log, or "(unassigned)"/"(deleted user)"
+   *  fallbacks so the assignee-change row still reads sensibly. */
+  private async assigneeDisplayName(userId: string): Promise<string> {
+    const u = await this.prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+    return u?.name ?? "(deleted user)";
   }
 }
