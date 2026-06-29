@@ -348,6 +348,7 @@ export class TicketsService {
           toEmail: msg.toEmail,
           // Inbound customer reply by construction: no staff sender, never AI.
           senderName: null,
+          senderRole: null,
           isAi: false,
           bodyText: msg.bodyText,
           createdAt: msg.createdAt.toISOString(),
@@ -521,7 +522,7 @@ export class TicketsService {
         assignee: { select: { name: true, email: true } },
         messages: {
           orderBy: { createdAt: "asc" },
-          include: { sender: { select: { name: true } } },
+          include: { sender: { select: { name: true, role: true } } },
         },
       },
     });
@@ -547,6 +548,10 @@ export class TicketsService {
         fromEmail: m.fromEmail,
         toEmail: m.toEmail,
         senderName: m.sender ? m.sender.name : null,
+        // The sender's role (admin/agent) drives the badge label in the thread;
+        // null for inbound customer messages and the system AI, which have no
+        // staff sender. Parallels `senderName` from the same `sender` relation.
+        senderRole: m.sender ? m.sender.role : null,
         // Authored by the system AI agent — either attributed now (senderId === the
         // AI user) or a legacy reply from before attribution (agent msg, no sender).
         isAi:

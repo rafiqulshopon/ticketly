@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ComponentProps } from "react";
 import { Sparkles } from "lucide-react";
-import { type TicketMessage } from "@ticketly/shared";
+import { type TicketMessage, type UserRole } from "@ticketly/shared";
 import { renderInlineMarkdown } from "@/lib/markdown";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, Badge, Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
@@ -11,20 +11,29 @@ const dateFmt = new Intl.DateTimeFormat(undefined, {
 });
 
 type BadgeVariant = ComponentProps<typeof Badge>["variant"];
+type SenderBadge = { label: string; variant: BadgeVariant };
 
-// senderType → label + badge variant (object map, not a switch — adding a value
-// is a type error until it's mapped here). The explicit `senderType` is the
-// source of truth for the Agent/Customer distinction in the thread.
-const MESSAGE_SENDER_TYPE: Record<
-  TicketMessage["senderType"],
-  { label: string; variant: BadgeVariant }
-> = {
-  customer: { label: "Customer", variant: "secondary" },
+/** Emerald badge reserved for the system AI agent's replies (vs a human). */
+const AI_BADGE: SenderBadge = { label: "AI Agent", variant: "success" };
+/** Muted badge for the ticket requester on the customer side of the thread. */
+const CUSTOMER_BADGE: SenderBadge = { label: "Customer", variant: "secondary" };
+
+// Human-agent badge by the sender's ACTUAL role (admin → "Admin", agent →
+// "Agent"), resolved from `senderRole` (surfaced from the DB `sender` relation).
+// Object map, not a switch: adding a role is a type error until it's mapped here.
+// Falls back to "Agent" if a role isn't resolved (shouldn't happen — a non-AI
+// agent message always carries a senderId/role).
+const AGENT_BADGE: Record<UserRole, SenderBadge> = {
+  admin: { label: "Admin", variant: "default" },
   agent: { label: "Agent", variant: "default" },
 };
 
-/** Distinct emerald badge for the system AI agent's replies (vs a human "Agent"). */
-const AI_SENDER = { label: "AI Agent", variant: "success" as BadgeVariant };
+/** Pick the header badge for a message — AI / customer / human-agent-by-role. */
+function senderBadge(message: TicketMessage): SenderBadge {
+  if (message.isAi) return AI_BADGE;
+  if (message.senderType === "customer") return CUSTOMER_BADGE;
+  return AGENT_BADGE[message.senderRole ?? "agent"];
+}
 
 /** Up-to-two-letter initials, tolerating an email address as the only handle. */
 function initials(value?: string | null): string {
@@ -100,7 +109,7 @@ export function TicketMessages({ messages }: { messages: TicketMessage[] }) {
 
 function MessageItem({ message, firstInGroup }: { message: TicketMessage; firstInGroup: boolean }) {
   const isAi = message.isAi;
-  const meta = isAi ? AI_SENDER : MESSAGE_SENDER_TYPE[message.senderType];
+  const meta = senderBadge(message);
   const isAgent = message.senderType === "agent";
   // The "AI Agent" badge already identifies the author; for a human agent show
   // the sender name, for a customer the external fromEmail.

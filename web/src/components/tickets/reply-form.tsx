@@ -121,9 +121,14 @@ export function ReplyForm({
         senderType: "agent",
         fromEmail: "",
         toEmail: ticket.requesterEmail,
-        // Real name so the optimistic reply groups/labels identically to the
-        // server response (no name/avatar flicker when it lands).
+        // Real name + role so the optimistic reply groups/labels identically to
+        // the server response (no name/avatar/badge flicker when it lands). The
+        // session's `role` is typed as a loose string, so narrow it to the union.
         senderName: session?.user?.name ?? null,
+        senderRole:
+          session?.user?.role === "admin" || session?.user?.role === "agent"
+            ? session.user.role
+            : null,
         isAi: false,
         bodyText: values.bodyText,
         createdAt: new Date().toISOString(),
