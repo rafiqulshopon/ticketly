@@ -143,6 +143,16 @@ export class NotificationsService {
     });
   }
 
+  /**
+   * The user ids who should hear about a ticket event — the same audience the
+   * bell fans out to. Exposed so the realtime push targets exactly the people who
+   * may see the ticket, keeping the access rule in one place. Delegates to
+   * {@link resolveRecipients}.
+   */
+  recipientUserIds(assigneeId: string | null): Promise<string[]> {
+    return this.resolveRecipients(assigneeId);
+  }
+
   // ---------------------------------------------------------------------------
 
   /**

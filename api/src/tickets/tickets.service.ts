@@ -13,12 +13,13 @@ import type {
   TicketListResponse,
   UpdateTicketInput,
 } from "@ticketly/shared";
-import type { Ticket as TicketRow, TicketStatus } from "../generated/prisma/client";
+import type { Message as MessageRow, Ticket as TicketRow, TicketStatus } from "../generated/prisma/client";
 import { AiService } from "../ai/ai.service";
 import { OutboundMailService } from "../channels/email/outbound-mail.service";
 import { sanitizeEmailHtml } from "../common/sanitize-html";
 import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { RealtimeService } from "../realtime/realtime.service";
 import { SystemAgentService } from "../system-agent/system-agent.service";
 import {
   AUTO_RESOLVE_TICKET_QUEUE,
@@ -92,6 +93,7 @@ export class TicketsService {
     private readonly systemAgent: SystemAgentService,
     private readonly mail: OutboundMailService,
     private readonly notifications: NotificationsService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   async create(
@@ -204,6 +206,17 @@ export class TicketsService {
         );
       }
 
+      // Push the new ticket live so admins get an instant toast (new tickets
+      // start owned by the AI agent, which the audience excludes, so admins are
+      // the only recipients). Best-effort, same posture as the fan-out above.
+      try {
+        await this.realtime.publishNewTicket(ticket.id);
+      } catch (err) {
+        this.logger.warn(
+          `Realtime: new-ticket push failed for ticket ${ticket.id} — ${err instanceof Error ? err.message : err}`,
+        );
+      }
+
       return { ticket, created: true };
     } catch (err) {
       // P2002 (unique violation) on messageId under a concurrent retry race:
@@ -290,8 +303,9 @@ export class TicketsService {
 
     // 3. Append to the thread iff the reply is from the ticket's own requester.
     if (parent && parent.requesterEmail === input.requesterEmail) {
+      let msg: MessageRow;
       try {
-        await this.prisma.message.create({
+        msg = await this.prisma.message.create({
           data: {
             ticketId: parent.id,
             direction: "inbound",
@@ -320,6 +334,27 @@ export class TicketsService {
       } catch (err) {
         this.logger.warn(
           `Notifications: new-message fan-out failed for ticket ${parent.id} — ${err instanceof Error ? err.message : err}`,
+        );
+      }
+      // Push the reply live to anyone viewing this ticket (and toast everyone
+      // else who may see it). Best-effort, same swallowed-error posture as the
+      // notification fan-out above — a push failure never rolls back the message.
+      try {
+        await this.realtime.publishTicketReply(parent.id, {
+          id: msg.id,
+          direction: "inbound",
+          senderType: "customer",
+          fromEmail: msg.fromEmail,
+          toEmail: msg.toEmail,
+          // Inbound customer reply by construction: no staff sender, never AI.
+          senderName: null,
+          isAi: false,
+          bodyText: msg.bodyText,
+          createdAt: msg.createdAt.toISOString(),
+        });
+      } catch (err) {
+        this.logger.warn(
+          `Realtime: reply push failed for ticket ${parent.id} — ${err instanceof Error ? err.message : err}`,
         );
       }
       return { ticketId: parent.id, created: false, appended: true };

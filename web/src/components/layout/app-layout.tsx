@@ -5,6 +5,7 @@ import { signOut, useSession } from "@/lib/auth";
 import { Avatar, AvatarFallback, Button } from "@/components/ui";
 import { Brand } from "@/components/brand/logo";
 import { NotificationBell } from "@/components/notifications/notification-bell";
+import { useRealtimeEvents } from "@/hooks/use-realtime-events";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -27,6 +28,11 @@ export function AppLayout() {
   const { data: session } = useSession();
   const navigate = useNavigate();
   const [signingOut, setSigningOut] = useState(false);
+
+  // One SSE connection for the whole authenticated session: live ticket replies
+  // (appended to an open thread / toasted) and new tickets (toasted). Opens on
+  // mount (behind RequireAuth) and closes on sign-out.
+  useRealtimeEvents();
 
   async function onSignOut() {
     setSigningOut(true);

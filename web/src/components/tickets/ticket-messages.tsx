@@ -35,6 +35,21 @@ function initials(value?: string | null): string {
   return letters || value[0]?.toUpperCase() || "?";
 }
 
+/**
+ * Identity used to collapse consecutive messages into one visual group (Messenger
+ * style). AI and human agents are both `senderType: "agent"` but must NOT collapse
+ * together (distinct bubble/avatar), and two different humans must not collapse.
+ * The wire `TicketMessage` has no `senderId`, so the best identity per kind is:
+ * AI → a fixed key; customer → `fromEmail` (all inbound in a ticket is one
+ * requester); human agent → `senderName` — NOT `fromEmail`, because agents all
+ * send from the shared `ticket-<id>@` address, so `fromEmail` can't tell them apart.
+ */
+function groupKey(m: TicketMessage): string {
+  if (m.isAi) return "ai";
+  if (m.senderType === "customer") return `customer:${m.fromEmail}`;
+  return `agent:${m.senderName ?? "support"}`;
+}
+
 /** Conversation thread for a ticket — the list of inbound/outbound messages. */
 export function TicketMessages({ messages }: { messages: TicketMessage[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -61,9 +76,13 @@ export function TicketMessages({ messages }: { messages: TicketMessage[] }) {
         {messages.length === 0 ? (
           <p className="text-sm text-muted-foreground">No messages yet.</p>
         ) : (
-          <div ref={scrollRef} className="scroll-slim flex max-h-[60vh] flex-col gap-5 overflow-y-auto pr-1">
-            {messages.map((message) => (
-              <MessageItem key={message.id} message={message} />
+          <div ref={scrollRef} className="scroll-slim flex max-h-[60vh] flex-col overflow-y-auto pr-1">
+            {messages.map((message, i) => (
+              <MessageItem
+                key={message.id}
+                message={message}
+                firstInGroup={i === 0 || groupKey(message) !== groupKey(messages[i - 1])}
+              />
             ))}
           </div>
         )}
@@ -72,7 +91,7 @@ export function TicketMessages({ messages }: { messages: TicketMessage[] }) {
   );
 }
 
-function MessageItem({ message }: { message: TicketMessage }) {
+function MessageItem({ message, firstInGroup }: { message: TicketMessage; firstInGroup: boolean }) {
   const isAi = message.isAi;
   const meta = isAi ? AI_SENDER : MESSAGE_SENDER_TYPE[message.senderType];
   const isAgent = message.senderType === "agent";
@@ -80,12 +99,16 @@ function MessageItem({ message }: { message: TicketMessage }) {
   // the sender name, for a customer the external fromEmail.
   const author = isAi ? null : isAgent ? message.senderName ?? "Support team" : message.fromEmail;
 
-  // Emerald is reserved for the AI; human agents get ink, customers get muted.
-  const bubble = isAi
-    ? "bg-ai text-ai-foreground rounded-br-md"
+  // Emerald is reserved for the AI; human agents get ink, customers get muted. The
+  // "tail" corner points to the sender side and only belongs on a group's first
+  // message (it sits beside the avatar); grouped bubbles use plain full rounding so a
+  // run reads as connected.
+  const bubbleColor = isAi
+    ? "bg-ai text-ai-foreground"
     : isAgent
-      ? "bg-primary text-primary-foreground rounded-br-md"
-      : "bg-muted text-foreground rounded-bl-md";
+      ? "bg-primary text-primary-foreground"
+      : "bg-muted text-foreground";
+  const tail = firstInGroup ? (isAgent ? "rounded-br-md" : "rounded-bl-md") : "";
 
   const avatarFallback = isAi
     ? "bg-ai/10 text-ai"
@@ -94,22 +117,39 @@ function MessageItem({ message }: { message: TicketMessage }) {
       : "bg-muted text-muted-foreground";
 
   return (
-    <div className={cn("flex gap-2.5", isAgent ? "flex-row-reverse" : "flex-row")}>
-      <Avatar className="mt-5 size-7 shrink-0">
-        <AvatarFallback className={cn("text-[10px]", avatarFallback)}>
-          {isAi ? <Sparkles className="size-3.5" /> : initials(author ?? message.fromEmail)}
-        </AvatarFallback>
-      </Avatar>
+    <div
+      className={cn(
+        "flex gap-2.5",
+        isAgent ? "flex-row-reverse" : "flex-row",
+        // Group starts get breathing room above; grouped messages stack tightly. The
+        // very first message has no top gap (matches the previous `gap-5` container).
+        firstInGroup ? "mt-5 first:mt-0" : "mt-1",
+      )}
+    >
+      {firstInGroup ? (
+        <Avatar className="mt-5 size-7 shrink-0">
+          <AvatarFallback className={cn("text-[10px]", avatarFallback)}>
+            {isAi ? <Sparkles className="size-3.5" /> : initials(author ?? message.fromEmail)}
+          </AvatarFallback>
+        </Avatar>
+      ) : (
+        // Avatar-width spacer so a grouped bubble stays aligned with the run's first
+        // bubble (same horizontal offset) without showing a second avatar/name.
+        <div className="size-7 shrink-0" aria-hidden="true" />
+      )}
       <div className={cn("flex w-full max-w-[80%] flex-col gap-1", isAgent ? "items-end" : "items-start")}>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Badge variant={meta.variant}>{meta.label}</Badge>
-          {author !== null && <span className="font-medium text-foreground">{author}</span>}
-          {isAgent && message.toEmail && <span>→ {message.toEmail}</span>}
-        </div>
+        {firstInGroup && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Badge variant={meta.variant}>{meta.label}</Badge>
+            {author !== null && <span className="font-medium text-foreground">{author}</span>}
+            {isAgent && message.toEmail && <span>→ {message.toEmail}</span>}
+          </div>
+        )}
         <p
           className={cn(
             "whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm leading-relaxed",
-            bubble,
+            bubbleColor,
+            tail,
           )}
         >
           {renderInlineMarkdown(message.bodyText)}

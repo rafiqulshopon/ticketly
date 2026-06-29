@@ -11,6 +11,7 @@ import {
   type TicketMessage,
 } from "@ticketly/shared";
 import { ApiError, polishReply, replyToTicket } from "@/lib/api";
+import { useSession } from "@/lib/auth";
 import { Button, Card, CardContent, CardHeader, CardTitle, Textarea, toast } from "@/components/ui";
 
 // The form's only field is the reply body, so its values are exactly the shared
@@ -63,6 +64,12 @@ export function ReplyForm({
   // handed to a memoized child, so skipping memoization is safe.
   "use no memo";
   const queryClient = useQueryClient();
+  // The signed-in agent's name is stamped onto the optimistic reply so it carries
+  // the same identity as the real message the server returns. Without it the temp
+  // message's group key differs (null name vs the real one) and it briefly renders
+  // as a group-start with avatar/name, then collapses once the real message lands —
+  // a visible "vanish" glitch.
+  const { data: session } = useSession();
   // The transition spans the whole send (optimistic add → await → cache update),
   // so `isSending` is true for exactly that window and gates the buttons/textarea.
   const [isSending, startTransition] = useTransition();
@@ -114,7 +121,9 @@ export function ReplyForm({
         senderType: "agent",
         fromEmail: "",
         toEmail: ticket.requesterEmail,
-        senderName: null,
+        // Real name so the optimistic reply groups/labels identically to the
+        // server response (no name/avatar flicker when it lands).
+        senderName: session?.user?.name ?? null,
         isAi: false,
         bodyText: values.bodyText,
         createdAt: new Date().toISOString(),
