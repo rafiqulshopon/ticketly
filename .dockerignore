@@ -1,0 +1,48 @@
+# Version control / metadata
+.git
+.gitignore
+.gitattributes
+
+# Claude Code (keep tracked shared config out of the image)
+.claude
+
+# Dependencies (installed fresh inside the image)
+**/node_modules
+
+# Build output (rebuilt inside the image)
+**/dist
+**/build
+**/*.tsbuildinfo
+**/.turbo
+**/.vite
+
+# Generated Prisma client (regenerated during the build)
+**/generated/prisma
+
+# Env / secrets — never bake into an image
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Docs, scratch, tooling not needed at runtime
+README.md
+CLAUDE.md
+postman
+skills-lock.json
+project-scope.md
+tech-stack.md
+implementation-plan.md
+
+# Tests / coverage / lint caches
+**/*.test.ts
+**/*.test.tsx
+**/coverage
+**/.eslintcache
+
+# Editor / OS
+.idea
+.vscode
+.DS_Store
+npm-debug.log*

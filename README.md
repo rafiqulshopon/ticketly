@@ -77,6 +77,85 @@ npm run dev
 | `npm run lint` | lint all workspaces (ESLint 10, flat config) |
 | `npm run lint:fix` | lint + auto-fix across workspaces |
 
+## Deploy to Railway
+
+Ticketly ships as a **single service**: the NestJS API also serves the compiled
+SPA (`@nestjs/serve-static`), so everything runs on one origin and Better Auth
+session cookies ride same-origin with no CORS/SameSite tuning. Railway builds it
+from the root [`Dockerfile`](./Dockerfile); [`railway.json`](./railway.json)
+wires the `/health` healthcheck.
+
+The **database stays external on Neon** — Railway's managed Postgres has no
+`pgvector`, which the schema requires. Railway only hosts the app; it connects
+to Neon over `DATABASE_URL`.
+
+### 1. Provision the database (Neon)
+
+Create a Neon project, enable pgvector (`CREATE EXTENSION IF NOT EXISTS vector;`),
+and copy the **direct** (non-pooled) connection string — the one **without**
+`-pooler` in the host. `prisma migrate deploy` (run at container start) needs the
+direct endpoint; the pooled `-pooler` endpoint hangs on Neon (see the
+`neon-migrate-pooled-connection-hang` note). A single replica doesn't need
+pooling.
+
+### 2. Create the Railway service
+
+- **New Project → Deploy from GitHub repo** (the working branch is `local`).
+  Railway auto-detects the Dockerfile and applies `railway.json`.
+- **Settings → Networking → Generate Domain** and note the public URL
+  (e.g. `https://ticketly.up.railway.app`). The app won't boot in production
+  until `BETTER_AUTH_URL`/`WEB_ORIGIN` are set to this URL (see below) — expect
+  the first deploy to fail until you set them, then it'll go green on redeploy.
+
+### 3. Environment variables (Variables tab)
+
+| Variable | Value |
+| --- | --- |
+| `DATABASE_URL` | Neon **direct** (non-pooled) connection string |
+| `NODE_ENV` | `production` |
+| `BETTER_AUTH_SECRET` | long random string (e.g. `openssl rand -hex 32`) |
+| `BETTER_AUTH_URL` | your Railway HTTPS URL (must be `https://` — checked at boot) |
+| `WEB_ORIGIN` | same Railway HTTPS URL (same-origin; needed for Better Auth's origin check) |
+| `SEED_ADMIN_EMAIL` | bootstrap admin email |
+| `SEED_ADMIN_PASSWORD` | strong password (≥ 12 chars; the seed rejects weak ones) |
+| `AI_API_KEY` | Zhipu/OpenAI-compatible key (reply polish returns 502 without it) |
+| `AI_BASE_URL` | provider base URL (default OpenRouter) |
+| `AI_MODEL` | model id (default `openai/gpt-5-nano`) |
+| `RESEND_API_KEY` | Resend key (email; optional — outbound disabled if unset) |
+| `RESEND_WEBHOOK_SECRET` | Svix secret for the inbound webhook (optional) |
+| `MAIL_FROM` / `MAIL_FROM_NAME` | verified Resend sender |
+| `SENTRY_DSN` | optional (server errors; no-op if unset) |
+
+`PORT` is **injected by Railway** — don't set it. `VITE_API_URL` stays **blank**
+(same-origin; the build bakes in the empty default, so requests hit the API on
+the same origin).
+
+### 4. Migrations + seed (first deploy)
+
+- **Migrations run automatically** on every container start
+  (`prisma migrate deploy` before `node dist/main`), so tables are created on
+  first boot. Watch the deploy logs for `migrate deploy` output.
+- **Seed the bootstrap admin once**, from your local machine against the
+  production DB (the runtime image has no `tsx`):
+
+  ```bash
+  # temporarily point your local api/.env at Neon, then:
+  npm run db:seed
+  ```
+
+### 5. Custom domain
+
+If you attach a custom domain, update `BETTER_AUTH_URL` and `WEB_ORIGIN` to it
+and redeploy. Resend's inbound webhook (if used) points at
+`POST https://<api-origin>/api/channels/email/inbound/resend`.
+
+### Local image build (optional sanity check)
+
+```bash
+docker build -t ticketly .
+# PORT + DATABASE_URL + BETTER_AUTH_URL etc. must be supplied to run it
+```
+
 ## Notes
 
 - **TypeScript 6.0.3** is used across all three workspaces, verified compatible with the current framework set (NestJS 11 / Vite 8 / React 19 / `@types/react`) and the lint toolchain (`typescript-eslint` 8.61 supports TS `<6.1`).

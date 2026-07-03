@@ -85,6 +85,17 @@ Build ordering matters: **`shared` must build before `api` and `web`** (both imp
 
 The default/working branch is **`local`** (not `main`). Use `local` for branch references and as the production/deploy branch on Vercel/Railway.
 
+## Deployment (Railway)
+
+Single service: the **API also serves the built SPA** (`@nestjs/serve-static` in `api/src/app.module.ts`, guarded by `existsSync` so dev is untouched) so everything is same-origin and Better Auth cookies need no CORS. Root `Dockerfile` (multi-stage) + `railway.json` (healthcheck on `/health`); full guide in [README.md](./README.md#deploy-to-railway). Invariants:
+
+- The **DB stays external on Neon** (pgvector), not Railway Postgres. Railway only hosts the app; `DATABASE_URL` points at Neon.
+- Use Neon's **direct (non-pooled) endpoint** for `DATABASE_URL` — `prisma migrate deploy` runs at container start (`CMD` in the Dockerfile) and hangs on the pooled `-pooler` endpoint.
+- `prisma` is a **dependency** (not devDep) of `@ticketly/api` so `migrate deploy` survives the runtime stage's `npm ci --omit=dev`. Don't move it back to devDeps.
+- The root `build` script runs `db:generate` (prisma generate) before the API build — `auth.config.ts` imports the gitignored generated client.
+- `api/public/` is gitignored — it's the SPA copy the Docker build makes; its presence in dev would make `ServeStaticModule` shadow the Vite proxy.
+- In prod set `BETTER_AUTH_URL` + `WEB_ORIGIN` to the Railway HTTPS URL (`auth.config.ts` throws if `BETTER_AUTH_URL` isn't `https://` when `NODE_ENV=production`). Leave `VITE_API_URL` blank (same-origin).
+
 ## AI provider
 
 The product's LLM is **GLM 5.2** via Zhipu's OpenAI-compatible endpoint — **not Claude**. Flash-tier GLM handles classify/summarize; Zhipu `embedding-3` powers RAG over pgvector. Do not wire Anthropic/Claude APIs into product features.

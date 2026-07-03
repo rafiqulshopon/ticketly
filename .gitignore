@@ -7,6 +7,11 @@ build/
 *.tsbuildinfo
 .turbo/
 
+# Production SPA bundle copied into the API at image build time (Dockerfile);
+# never present in dev — its presence would make ServeStaticModule serve a stale
+# build instead of the Vite dev proxy.
+api/public/
+
 # ---------- Environment & secrets ----------
 .env
 .env.*
