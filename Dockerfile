@@ -53,6 +53,11 @@ COPY --from=build /app/api/dist ./api/dist
 COPY --from=build /app/api/public ./api/public
 COPY --from=build /app/api/prisma ./api/prisma
 COPY --from=build /app/api/prisma.config.ts ./api/prisma.config.ts
+# Flat-file knowledge base read at runtime by ai/knowledge-base.service.ts via
+# readFileSync(resolve(cwd, "knowledge-base.md")). It's not compiled into dist
+# (nest-cli.json has no assets), so ship it explicitly — without it the AI
+# auto-resolve throws ENOENT and silently leaves tickets in OPEN with no reply.
+COPY --from=build /app/api/knowledge-base.md ./api/knowledge-base.md
 
 WORKDIR /app/api
 EXPOSE 3000
