@@ -94,7 +94,7 @@ export function UserForm({ open, onOpenChange, ...rest }: UserFormProps) {
       }
       avoidKeyboard
     >
-      <View className="gap-3">
+      <View className="gap-4">
         <Controller
           control={control}
           name="name"
@@ -153,11 +153,11 @@ export function UserForm({ open, onOpenChange, ...rest }: UserFormProps) {
 
         {errors.root ? <Text className="text-sm text-destructive">{errors.root.message}</Text> : null}
 
-        <View className="mt-1 flex flex-row justify-end gap-2">
-          <Button variant="outline" onPress={() => onOpenChange(false)} disabled={isSubmitting}>
+        <View className="mt-2 flex flex-row gap-2">
+          <Button variant="outline" className="flex-1" onPress={() => onOpenChange(false)} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button onPress={() => void handleSubmit(onSubmit)()} loading={isSubmitting}>
+          <Button className="flex-1" onPress={() => void handleSubmit(onSubmit)()} loading={isSubmitting}>
             {isEdit ? "Save changes" : "Create user"}
           </Button>
         </View>

@@ -64,11 +64,11 @@ export function DeleteUserConfirm({
       }
     >
       {errorMessage ? <Text className="mb-3 text-sm text-destructive">{errorMessage}</Text> : null}
-      <View className="flex flex-row justify-end gap-2">
-        <Button variant="outline" onPress={() => handleOpenChange(false)} disabled={mutation.isPending}>
+      <View className="flex flex-row gap-2">
+        <Button variant="outline" className="flex-1" onPress={() => handleOpenChange(false)} disabled={mutation.isPending}>
           Cancel
         </Button>
-        <Button variant="destructive" onPress={() => void onConfirm()} loading={mutation.isPending}>
+        <Button variant="destructive" className="flex-1" onPress={() => void onConfirm()} loading={mutation.isPending}>
           Delete user
         </Button>
       </View>

@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { Keyboard, KeyboardAvoidingView, Platform, Pressable, Text, View } from "react-native";
 import ReactNativeModal from "react-native-modal";
 import { X } from "lucide-react-native";
 import { useIconColor } from "@/lib/colors";
@@ -11,7 +11,9 @@ interface ModalProps {
   description?: string;
   children: ReactNode;
   /** Lifts the panel above the keyboard (form variant). Wraps the body in a
-   *  KeyboardAvoidingView + ScrollView and dismisses the keyboard on close. */
+   *  KeyboardAvoidingView (behavior="padding") and dismisses the keyboard on
+   *  close. No ScrollView — a bounded-height ScrollView inside a centered modal
+   *  can collapse and hide its content, and a 3-field form doesn't need to scroll. */
   avoidKeyboard?: boolean;
 }
 
@@ -28,7 +30,7 @@ export function Modal({ open, onOpenChange, title, description, children, avoidK
   }
 
   const body = (
-    <View className="w-[88%] max-w-sm rounded-lg bg-card p-4">
+    <View className="w-[92%] max-w-md rounded-xl bg-card p-5">
       <View className="flex flex-row items-start justify-between gap-3">
         <View className="flex-1">
           {title ? <Text className="text-lg font-semibold text-foreground">{title}</Text> : null}
@@ -38,7 +40,7 @@ export function Modal({ open, onOpenChange, title, description, children, avoidK
           <X size={18} color={closeColor} />
         </Pressable>
       </View>
-      <View className="mt-4">{children}</View>
+      <View className="mt-5">{children}</View>
     </View>
   );
 
@@ -56,7 +58,7 @@ export function Modal({ open, onOpenChange, title, description, children, avoidK
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={{ width: "100%", alignItems: "center" }}
         >
-          <ScrollView keyboardShouldPersistTaps="handled">{body}</ScrollView>
+          {body}
         </KeyboardAvoidingView>
       ) : (
         body
