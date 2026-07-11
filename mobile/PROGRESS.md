@@ -6,7 +6,7 @@ milestone view; **this file is the granular tracker** — what's built, what's
 next, and the decisions worth not losing. Conventions live in the root
 [CLAUDE.md](../CLAUDE.md).
 
-**Last updated:** 2026-07-11 · **Current milestone:** M1 ✅ complete → M2 next
+**Last updated:** 2026-07-11 · **Current milestone:** M2 ✅ complete → M3 next
 
 ---
 
@@ -105,13 +105,45 @@ existed) — no new API plumbing.
 - Loading/empty/error states are minimal text (M4 hardening will unify them); the list has no pull-to-refresh (M4).
 - `react-native-modal ^14.0.0-rc.1` is an RC — watch for regressions.
 
-## M2 — Notifications & shell ⬜
+## M2 — Notifications & shell ✅ COMPLETE
 
-- [ ] Notification bell (poll `unread-count` every 30s)
-- [ ] Realtime invalidation of notifications on SSE events
-- [ ] Mark single / mark-all read
-- [ ] Full notifications feed screen (replace stub)
-- [ ] Bottom-tab shell polish + `RoleRedirect` verified
+Verified 2026-07-11: `tsc --noEmit` (mobile), `eslint . --max-warnings 0` (mobile),
+`jest` (10/10), and `npx expo export --platform ios` all pass.
+
+- [x] Notification bell — a live unread-count `tabBarBadge` on the Notifications tab (polled every 30s)
+- [x] Realtime invalidation of notifications on SSE events (list + count keys)
+- [x] Mark single / mark-all read
+- [x] Full notifications feed screen (replaced the M0 stub)
+- [x] Bottom-tab shell polish (icons on every tab) + `RoleRedirect` verified
+
+### What was built
+
+A UI build on the M0/M1 data layer — every notification endpoint, the mobile API
+client, the shared `Notification`/`UnreadCount` schemas, and the SSE mount already
+existed. No backend changes.
+
+- **Unread-count hook** — [src/hooks/use-notifications.ts](./src/hooks/use-notifications.ts): `useUnreadNotificationCount()` polls `GET /api/notifications/unread-count` every 30s (`refetchInterval`), returns `data?.count ?? 0`. Mounted in `(app)/_layout` so the badge updates on every tab.
+- **Tab shell + badge** — [src/app/(app)/_layout.tsx](<./src/app/(app)/_layout.tsx>): `tabBarIcon` on all five tabs via `lucide-react-native` (Inbox / LayoutDashboard / Users / Bell); `tabBarActiveTintColor`/`tabBarInactiveTintColor` from `useIconColor("primary")`/`("muted")`; the Notifications tab carries `tabBarBadge: unread || undefined`. Renamed the tab "Alerts" → "Notifications". All hooks run before the `isPending`/`!session` early returns (Rules of Hooks).
+- **Notification row** — [src/components/notifications/notification-item.tsx](./src/components/notifications/notification-item.tsx): `NotificationItem` + co-located `NOTIFICATION_META` (object map, not a switch). Ports the web's row layout: tinted icon chip (`bg-info-soft`/`bg-muted`), label + `bg-destructive` unread dot, subject, `requesterName · relativeTime`. Unread rows get `bg-accent` (no `accent-soft` token exists; `bg-accent` vs `bg-card` is the unread signal). Icon stroke via `useIconColor(isUnread ? "info" : "muted")`.
+- **Feed screen** — [src/app/(app)/notifications.tsx](<./src/app/(app)/notifications.tsx>): replaced the 12-line stub. `FlatList` of `NotificationItem`; `ListHeaderComponent` (title + unread count + "Mark all read"); `ListEmptyComponent` ("You're all caught up."); loading → `ActivityIndicator`; error → `text-destructive` + "Try again". Row press navigates to `/tickets/${n.ticketId}` + fires `markNotificationRead` (non-fatal, skipped if read). `refresh()` invalidates both `["notifications"]` and `["notifications","unread-count"]`.
+- **Realtime hook** — [src/hooks/use-realtime-events.ts](./src/hooks/use-realtime-events.ts): added explicit `["notifications","unread-count"]` invalidation alongside `["notifications"]` in the `new_message` + `new_ticket` handlers (prefix matching already covered it; explicit mirrors the web's `refresh()`).
+- **RoleRedirect** — [src/app/(app)/index.tsx](<./src/app/(app)/index.tsx>): verified (admin→dashboard, agent→tickets; `index` hidden via `href: null`); added a comment documenting why no `isPending` guard is needed (the layout gates it).
+- **Test** — [src/components/notifications/notification-item.test.tsx](./src/components/notifications/notification-item.test.tsx): 4 assertions (meta completeness + labels + render of label/subject/requester + unread-dot presence). `.tsx` (renders JSX); stubs `lucide-react-native` (its ESM isn't jest-transformed) and `await`s `render` (`@testing-library/react-native` v13 returns a Promise).
+
+### Decisions worth not losing
+
+- **The "bell" is a tab badge, not a header component** — a `Bell` tab icon with a live `tabBarBadge`. Always visible from any tab; unifies with the tab-polish deliverable. Chosen over a header bell (web-style), which would only show on screens with a header and need per-screen mounting.
+- **`tabBarBadge` updates on re-render** — `_layout.tsx` mounts `useUnreadNotificationCount()`, so when the polled/SSE-invalidated count changes the layout re-renders and the badge updates. No `navigation.setOptions` dance needed.
+- **No `accent-soft` token** — unread rows use `bg-accent` (`#f1f4f8`) vs `bg-card` (`#ffffff`); the unread dot + bold label + tinted icon chip carry the rest of the signal. A soft-accent token can be added in M4 if the tint is too subtle.
+- **`ticket_assigned` notifications have no SSE event** — the backend emits only `new_message`/`new_ticket`/`ticket_activity`/`ping`. The badge refreshes on the next 30s poll (same gap as the web). Not fixed in M2 (would need a backend `notification` SSE event).
+- **lucide mock in tests** — `jest.mock("lucide-react-native", …)` stubs icons to `() => null`; the package's ESM (`dist/esm/*.mjs`) isn't transformed by jest-expo. Mock lives in the test file (not `jest.setup.ts`) since `jest.mock` is per-file-hoisted and only this test renders icons so far.
+- **`render` is async** — `@testing-library/react-native` v13's `render` returns a `Promise<RenderAPI>` (React 19 `act`), so render tests `await render(...)`.
+
+### Known gaps / flagged (not blocking M3)
+
+- **No manual device run yet** — all four build gates pass, but the flow hasn't been driven on a simulator/device end-to-end (badge poll, realtime bump, mark-read, mark-all). Do this before M3. (M1's manual run is also still pending.)
+- **In-screen admin guards on `dashboard.tsx`/`users.tsx` deferred to M3** — tab hiding (`href: null`) ≠ route guard; an agent deep-linking to `/(app)/dashboard` would still render the stub. Harmless today (stubs render nothing sensitive); add `isAdmin` redirects when those screens are built in M3.
+- **Cold-launch edge** — `useUnreadNotificationCount` mounts in `_layout` during `isPending`, so its first fetch may 401 before the session cookie loads. Silent (no retry on `ApiError`); self-heals via the 30s poll / SSE invalidation / tab switch. Gate on session in a later pass if it matters.
 
 ## M3 — Admin ⬜
 

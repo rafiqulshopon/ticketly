@@ -103,6 +103,10 @@ export function useRealtimeEvents(): void {
       }
       queryClient.invalidateQueries({ queryKey: ["tickets"] });
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      // Explicit so the tab-badge count (["notifications","unread-count"])
+      // refreshes on the live event — prefix matching already covers it, but
+      // this mirrors the web's refresh() and the feed screen's own refresh().
+      queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
     });
 
     es.addEventListener("new_ticket", (e) => {
@@ -118,6 +122,10 @@ export function useRealtimeEvents(): void {
       });
       queryClient.invalidateQueries({ queryKey: ["tickets"] });
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      // Explicit so the tab-badge count (["notifications","unread-count"])
+      // refreshes on the live event — prefix matching already covers it, but
+      // this mirrors the web's refresh() and the feed screen's own refresh().
+      queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
     });
 
     es.addEventListener("ticket_activity", (e) => {
