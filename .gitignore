@@ -71,5 +71,23 @@ Desktop.ini
 *.swp
 *.swo
 
+# ---------- React Native / Expo (mobile/) ----------
+.expo/
+*.tsbuildinfo
+ios/build/
+ios/Pods/
+ios/*.xcworkspace/xcuserdata/
+android/.gradle/
+android/build/
+android/app/build/
+android/app/release/
+android/app/debug/
+*.iml
+*.bundle
+*.jsbundle
+*.jks
+*.keystore
+GoogleService-Info.plist
+
 # ---------- Misc local files ----------
 *.local

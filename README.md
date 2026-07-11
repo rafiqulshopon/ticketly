@@ -1,6 +1,6 @@
 # Ticketly
 
-AI-powered ticket management system. A decoupled monorepo: a **Vite + React** SPA (`web/`) and a **NestJS** API (`api/`), sharing Zod schemas via `shared/`.
+AI-powered ticket management system. A decoupled monorepo: a **Vite + React** SPA (`web/`), a **NestJS** API (`api/`), and an **Expo / React Native** mobile app (`mobile/`), sharing Zod schemas via `shared/`.
 
 Full design lives in [project-scope.md](./project-scope.md), [tech-stack.md](./tech-stack.md), and [implementation-plan.md](./implementation-plan.md).
 
@@ -28,7 +28,8 @@ ticketly/
 │       ├── lib/            # api client, Better Auth client, cn()
 │       ├── routes/         # dashboard + login placeholders
 │       └── stores/         # Zustand auth store
-├── shared/                 # @ticketly/shared — Zod schemas + types (api + web)
+├── shared/                 # @ticketly/shared — Zod schemas + types (api + web + mobile)
+├── mobile/                 # Expo SDK 57 + React Native app (@ticketly/mobile)
 └── package.json            # npm workspaces + convenience scripts
 ```
 
@@ -47,6 +48,7 @@ npm run build --workspace @ticketly/shared
 # 4. Configure env
 cp api/.env.example api/.env      # set DATABASE_URL, BETTER_AUTH_SECRET, seed creds
 cp web/.env.example web/.env      # leave VITE_API_URL blank (dev uses the proxy)
+cp mobile/.env.example mobile/.env  # EXPO_PUBLIC_API_URL=http://localhost:3000 (simulator)
 
 # 5. Generate Prisma client + create tables
 npm run db:migrate                # creates auth tables + Ticket/Message/Kb*/Draft
@@ -62,6 +64,7 @@ npm run dev
 
 - **API**: http://localhost:3000 — Swagger at `/api/docs`, health at `/health`
 - **Web**: http://localhost:5173 — proxies `/api` → `:3000` (so sessions/cookies just work in dev)
+- **Mobile**: Expo Metro packager on `:8081` — talks to the API directly at `EXPO_PUBLIC_API_URL` (no dev proxy on a device)
 
 ## Scripts (from repo root)
 
@@ -69,6 +72,7 @@ npm run dev
 | --- | --- |
 | `npm run setup` | install + build shared + `prisma generate` |
 | `npm run dev` | run api (`nest --watch`) + web (`vite`) concurrently |
+| `npm run dev:mobile` | start the Expo Metro packager for `mobile/` (run separately — RN packager is a different process) |
 | `npm run build` | build shared → api → web |
 | `npm run db:migrate` | `prisma migrate dev` |
 | `npm run db:generate` | `prisma generate` |
@@ -76,6 +80,34 @@ npm run dev
 | `npm run db:seed` | seed the bootstrap admin |
 | `npm run lint` | lint all workspaces (ESLint 10, flat config) |
 | `npm run lint:fix` | lint + auto-fix across workspaces |
+
+## Mobile app (`mobile/`)
+
+An Expo SDK 57 (React Native 0.86, React 19.2) app that mirrors the web — same
+REST API, same `@ticketly/shared` schemas. Distributed as a standalone binary
+(EAS Build / app stores); **not** part of the Railway Docker image.
+
+**Auth:** RN has no browser cookie jar, so the mobile client uses
+`@better-auth/expo` — the session cookie lives in `expo-secure-store`
+(Keychain / Encrypted SharedPreferences) and is attached as a `Cookie` header on
+every request. The backend enables this with the `expo()` plugin + the
+`ticketly://` scheme in `trustedOrigins` (`api/src/auth/auth.config.ts`); the
+web's cookie flow is unchanged.
+
+```bash
+# Configure env (FULL API origin — no dev proxy on a device)
+cp mobile/.env.example mobile/.env
+#   EXPO_PUBLIC_API_URL=http://localhost:3000   # iOS simulator
+#   EXPO_PUBLIC_API_URL=http://<your-LAN-IP>:3000  # physical device
+
+# Start the packager (separate from api+web)
+npm run dev:mobile                  # → npx expo start
+#   press i (iOS sim), a (Android), or scan the QR with Expo Go
+
+npx expo install --fix              # align expo-* / react-native-* versions after install, if needed
+```
+
+Feature status is tracked per-milestone in [implementation-plan.md](./implementation-plan.md).
 
 ## Deploy to Railway
 
@@ -158,7 +190,7 @@ docker build -t ticketly .
 
 ## Notes
 
-- **TypeScript 6.0.3** is used across all three workspaces, verified compatible with the current framework set (NestJS 11 / Vite 8 / React 19 / `@types/react`) and the lint toolchain (`typescript-eslint` 8.61 supports TS `<6.1`).
+- **TypeScript 6.0.3** is used across all four workspaces, verified compatible with the current framework set (NestJS 11 / Vite 8 / React 19 / Expo SDK 57 / `@types/react`) and the lint toolchain (`typescript-eslint` 8.61 supports TS `<6.1`).
 - **Linting**: ESLint 10 flat configs live in each workspace's `eslint.config.mjs`; `npm run lint` checks all three. The `web/` config registers the React plugins by hand because ESLint 10 rejects the legacy `plugins: [...]` array form the plugins' own presets still ship.
 - **Prisma 7**: uses the `prisma-client` generator (client generated to `api/src/generated/prisma`) + a runtime `@prisma/adapter-pg` driver adapter. The migrate datasource URL lives in `api/prisma.config.ts`, **not** in `schema.prisma`. After cloning, run `npm run db:generate` to produce the client (it's gitignored).
 - **Better Auth**: the `auth` instance is configured (email/password + admin plugin + Prisma adapter), but the HTTP handler and session guard are **Phase 1** work — see `api/src/auth/auth.config.ts`.

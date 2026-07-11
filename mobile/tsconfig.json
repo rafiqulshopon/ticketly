@@ -1,0 +1,26 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    // baseUrl is deprecated in TS 6.0 (removed in 7.0) but still required for
+    // paths resolution; ignoreDeprecations silences it. Same as the web/api
+    // workspaces. TS 6.0.3 is the repo-wide pin (do not introduce another).
+    "ignoreDeprecations": "6.0",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@/assets/*": ["./assets/*"],
+      // Resolve @ticketly/shared to its TypeScript *source* (one workspace up)
+      // so type-checking works without building shared/dist, and so edits
+      // hot-reload. Metro mirrors this via extraNodeModules in metro.config.js.
+      "@ticketly/shared": ["../shared/src"]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts",
+    "nativewind-env.d.ts"
+  ]
+}

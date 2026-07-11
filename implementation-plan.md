@@ -137,6 +137,22 @@ _Frontend (`web/`):_
 
 ---
 
+## Mobile app (`mobile/`) — parallel milestone
+
+**Goal:** a React Native (Expo) app giving agents/admins the same ticketing workflow on a phone. Consumes the same REST API; reuses `@ticketly/shared`. Foundation + auth done; feature screens phased below.
+
+The backend unlock: the `@better-auth/expo` server plugin (`api/src/auth/auth.config.ts`) lets the mobile client persist the session cookie in `expo-secure-store` and attach it as a `Cookie` header — RN has no browser cookie jar. Web is unaffected.
+
+- [x] **M0 — Foundations & auth.** Expo SDK 57 workspace (`@ticketly/mobile`), NativeWind v4 (Signal tokens ported from `web/src/index.css`), ESLint flat config, Expo Router shell. `@better-auth/expo` server plugin + `ticketly://` scheme. Mobile auth client + login + auth guard. `lib/api.ts` (Cookie interceptor + `ApiError`), `lib/query-client.ts`, `@ticketly/shared` wired via Metro source alias. Tickets list + detail smoke-test screens prove the wiring end-to-end.
+- [ ] **M1 — Tickets.** Full list (debounced search, server sort/filter/paginate, role-aware statuses). Detail: thread + smooth scroll, reply form (optimistic + `replyToTicket`), AI polish + summarize, inline property edits, Activity tab. Realtime SSE wired into the detail page.
+- [ ] **M2 — Notifications & shell.** Notification bell (poll unread-count 30s + realtime invalidation), mark-read. Bottom-tab shell, `RoleRedirect`.
+- [ ] **M3 — Admin.** Dashboard (stat cards + `victory-native` bar chart). Users mgmt (list, create/edit, delete).
+- [ ] **M4 — Hardening.** Sentry + error boundaries, loading/empty/error states, pull-to-refresh, `expo-updates` OTA + `eas.json` build profiles.
+
+**🚩 Mobile parity milestone — feature parity with the web.**
+
+---
+
 ## Assumptions baked in (confirm or change before we start)
 
 These resolve the open gaps from scoping so the plan is buildable. Flag any you want different:

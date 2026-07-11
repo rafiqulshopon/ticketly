@@ -41,6 +41,10 @@ implementation-plan.md
 **/coverage
 **/.eslintcache
 
+# Mobile app — not part of the API+web Docker image (distributed as a
+# standalone binary via EAS / app stores, consumes the same HTTP API).
+mobile/
+
 # Editor / OS
 .idea
 .vscode

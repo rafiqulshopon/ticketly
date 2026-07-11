@@ -12,7 +12,8 @@ A decoupled monorepo (npm workspaces):
 
 - `api/` — **NestJS 11** REST API (`@ticketly/api`), port 3000. Swagger at `/api/docs`.
 - `web/` — **Vite 8 + React 19** SPA (`@ticketly/web`), port 5173.
-- `shared/` — **`@ticketly/shared`**, Zod schemas + types imported by both. **Build-time only** — it is compiled INTO both bundles and is never hosted on its own.
+- `shared/` — **`@ticketly/shared`**, Zod schemas + types imported by all. **Build-time only** — it is compiled INTO both bundles and is never hosted on its own.
+- `mobile/` — **Expo SDK 57 + React Native 0.86** app (`@ticketly/mobile`), React 19.2. Consumes the same REST API and reuses `@ticketly/shared`. See the **Mobile** section below.
 
 ## Commands (from repo root)
 
@@ -20,6 +21,7 @@ A decoupled monorepo (npm workspaces):
 | --- | --- |
 | `npm run setup` | install + build `shared` + `prisma generate` |
 | `npm run dev` | build `shared`, then run api + web concurrently |
+| `npm run dev:mobile` | start the Expo Metro packager for `mobile/` (run separately from api+web — the RN packager is a different process) |
 | `npm run build` | build `shared` → `api` → `web` |
 | `npm run db:generate` | regenerate the Prisma client |
 | `npm run db:migrate` | `prisma migrate dev` |
@@ -33,8 +35,8 @@ Build ordering matters: **`shared` must build before `api` and `web`** (both imp
 ## Toolchain — hard requirements
 
 - **Node.js ≥ 24** (`.nvmrc` = `24`). Always use Node 24.
-- **TypeScript 6.0.3 across all three workspaces** — do not introduce a different TS version. Verified compatible with NestJS 11 / Vite 8 / React 19 / `typescript-eslint` 8.61 (supports TS `<6.1`).
-- npm workspaces; package names are `@ticketly/{api,web,shared}`.
+- **TypeScript 6.0.3 across all four workspaces** — do not introduce a different TS version. Verified compatible with NestJS 11 / Vite 8 / React 19 / Expo SDK 57 / `typescript-eslint` 8.61 (supports TS `<6.1`).
+- npm workspaces; package names are `@ticketly/{api,web,shared,mobile}`.
 
 ## Backend (`api/`) conventions
 
@@ -53,6 +55,18 @@ Build ordering matters: **`shared` must build before `api` and `web`** (both imp
 - **Build all UI with [shadcn/ui](https://ui.shadcn.com)** — not hand-rolled primitives or other component libraries. Config is `web/components.json` (`new-york` style, `neutral` base color, CSS variables, lucide icons); generated components live in `web/src/components/ui/`. **Add new ones via the shadcn CLI run from `web/`** (`npx shadcn@latest add <name>`) — they're copied in and can then be edited freely.
 - **Styling uses Tailwind utilities + the design tokens** defined in `web/src/index.css` (`bg-background`, `text-muted-foreground`, `text-destructive`, `border`, etc.) — **never hardcode hex colors**. Compose existing shadcn primitives; don't reinvent them.
 - **Component tests** (Vitest + React Testing Library) live as `*.test.tsx` next to the component. Run `npm test --workspace @ticketly/web` (or `test:watch`). Mock `@/lib/api` (never hit the network); wrap data components in a fresh `QueryClientProvider` with `retry: false`; import from `vitest` explicitly (no globals).
+
+## Mobile (`mobile/`) conventions
+
+- **Expo SDK 57** (React Native 0.86, React 19.2 — matches the web) + **Expo Router** (file-based routes in `mobile/src/app/`, route groups `(auth)` / `(app)`). Run with `npm run dev:mobile` — **separate from `npm run dev`** (the RN packager is a different process; don't add it to the concurrent api+web script).
+- **Styling: NativeWind v4** (Tailwind v3) — the *stable* release (v5 is preview only, not on the `latest` dist-tag). Config is `mobile/tailwind.config.js` + `mobile/src/global.css` (the "Signal" tokens ported from `web/src/index.css` — values identical, only the mechanism differs: v3 `@tailwind` directives + `theme.extend.colors` mapped to CSS vars vs. the web's v4 `@theme inline`). Same rule: **never hardcode hex colors**. `babel.config.js` sets `jsxImportSource: "nativewind"` so `className` works on RN primitives.
+- **Auth: the `@better-auth/expo` plugin.** RN has no browser cookie jar or native `EventSource`, so the web's `withCredentials`/`EventSource` flow does not apply. The mobile client (`mobile/src/lib/auth.ts`) uses the same `better-auth/react` `createAuthClient` + an `expoClient` plugin backed by `expo-secure-store` (Keychain / Encrypted SharedPreferences). The session cookie is persisted in SecureStore and attached to every request as a `Cookie` header via an axios interceptor that calls `authClient.getCookie()` (`mobile/src/lib/api.ts`). The **server enables this** with the `expo()` plugin + the `ticketly://` scheme in `trustedOrigins` (`api/src/auth/auth.config.ts`) — the web client is completely unaffected (cookies still work alongside it).
+- **Env:** `EXPO_PUBLIC_API_URL` = full backend origin (no `/api` suffix). There is **no dev proxy on a device**, so it must be reachable: `http://localhost:3000` on the simulator, the dev machine's LAN IP for a physical device, the Railway URL in prod. Expo inlines `EXPO_PUBLIC_*` at build time (analog of Vite's `VITE_`).
+- **`@ticketly/shared` in dev:** `mobile/metro.config.js` aliases `@ticketly/shared` to its **TS source** (`../shared/src`) via `extraNodeModules` + `watchFolders`, so shared edits hot-reload — RN has no Vite proxy and the built `shared/dist` is CommonJS (the "does not provide an export named" gotcha). This mirrors the web's dev alias; no rebuild of shared is needed for mobile.
+- **Realtime:** SSE via `react-native-sse` (RN has no native `EventSource`) with the `Cookie` header, in `mobile/src/hooks/use-realtime-events.ts` — ported from the web hook; same TanStack Query keys + invalidation semantics. Toasts use `react-native-toast-message` (not `sonner`).
+- **Tests: Jest + `@testing-library/react-native`** — **not Vitest** (Vitest can't drive Metro/RN transforms). This is the one toolchain divergence from the web.
+- **Justified divergences from web:** Expo Router (not React Router); `FlatList` (not `@tanstack/react-table`); `victory-native` (not `recharts`); `lucide-react-native` (not `lucide-react`); bottom sheets / `react-native-modal` (not Radix dialogs). Forms still use `react-hook-form` + `@hookform/resolvers/zod` + `zod` (same as web).
+- **Mobile is NOT in the Docker image** — `.dockerignore` excludes `mobile/`. It ships as a standalone binary (EAS Build / app stores) consuming the same HTTP API. The Dockerfile's explicit `package.json` copies already exclude it.
 
 ## Authentication
 
@@ -102,7 +116,7 @@ The product's LLM is **GLM 5.2** via Zhipu's OpenAI-compatible endpoint — **no
 
 ## Looking up docs — use context7
 
-Use the **context7 MCP server** to fetch up-to-date documentation **before relying on memory** for any library/framework in this stack: NestJS, Prisma, Better Auth (`@thallesp/nestjs-better-auth`), Vite, React, React Router, Zod, TanStack Query, Tailwind, shadcn/ui, pg-boss, Resend. These move fast and training data goes stale.
+Use the **context7 MCP server** to fetch up-to-date documentation **before relying on memory** for any library/framework in this stack: NestJS, Prisma, Better Auth (`@thallesp/nestjs-better-auth`), Vite, React, React Router, Expo, React Native, NativeWind, Expo Router, Zod, TanStack Query, Tailwind, shadcn/ui, pg-boss, Resend. These move fast and training data goes stale.
 
 - Call `mcp__context7__resolve-library-id` first to get the Context7 library id, then `mcp__context7__query-docs` with it.
 - Prefer context7 over web search for library/API questions (config, version migration, exact API syntax).

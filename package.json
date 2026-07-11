@@ -6,13 +6,15 @@
   "workspaces": [
     "api",
     "web",
-    "shared"
+    "shared",
+    "mobile"
   ],
   "scripts": {
     "setup": "npm install && npm run build --workspace @ticketly/shared && npm run db:generate",
     "dev": "npm run build --workspace @ticketly/shared && concurrently -n api,web -c green,cyan \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "npm run start:dev --workspace @ticketly/api",
     "dev:web": "npm run dev --workspace @ticketly/web",
+    "dev:mobile": "npm run dev --workspace @ticketly/mobile",
     "build": "npm run build --workspace @ticketly/shared && npm run db:generate && npm run build --workspace @ticketly/api && npm run build --workspace @ticketly/web",
     "start": "npm run start:prod --workspace @ticketly/api",
     "db:generate": "npm run prisma:generate --workspace @ticketly/api",

@@ -14,6 +14,15 @@ Decoupled architecture: a **React SPA frontend** and a **NestJS backend API**, t
 - **TanStack Query** — server-state / data-fetching (caching, dedup, background refetch, loading + error state). The standard way to fetch API data in `web/` — never use raw `fetch`.
 - **Axios** — HTTP transport behind the shared client in `lib/api.ts` (`withCredentials` carries the session cookie). Auth/session state comes from Better Auth's reactive `useSession()`; remaining UI state stays local in components.
 
+## Mobile (`mobile/`)
+
+- **Expo SDK 57 + React Native 0.86** (React 19.2) — **Expo Router** for file-based navigation. Distributed as a standalone app binary (EAS Build / app stores); consumes the same REST API as the web. Not part of the Railway Docker image.
+- **NativeWind v4** (Tailwind v3) — the *stable* release (v5 is preview only). Brings the web's Tailwind token model to RN; the "Signal" tokens are ported from `web/src/index.css`.
+- **Auth: `@better-auth/expo`** — the mobile client persists the Better Auth session cookie in `expo-secure-store` and attaches it as a `Cookie` header (RN has no browser cookie jar). The server enables this via the `expo()` plugin + the `ticketly://` scheme in `trustedOrigins`; the web's cookie flow is unchanged.
+- **TanStack Query + Axios** — same data-fetching model as the web (shared query keys, `ApiError`). **Realtime** via `react-native-sse` (RN has no native `EventSource`) with the cookie header.
+- **Zod** — shared schemas reused from `@ticketly/shared`.
+- **Tests: Jest + `@testing-library/react-native`** (not Vitest — Vitest can't drive Metro/RN transforms).
+
 ## Backend (`api/`)
 
 - **NestJS + TypeScript** — REST API, with auto-generated Swagger/OpenAPI docs

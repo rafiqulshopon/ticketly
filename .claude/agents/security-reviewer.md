@@ -18,7 +18,8 @@ This is a decoupled monorepo:
 
 - **`api/`** — NestJS 11 REST API with Better Auth (cookie sessions, roles: admin/agent), global AuthGuard, Prisma 7 with `@prisma/adapter-pg`.
 - **`web/`** — Vite + React 19 SPA using shadcn/ui.
-- **`shared/`** — Zod schemas imported by both.
+- **`mobile/`** — Expo SDK 57 + React Native 0.86 app. Authenticates via `@better-auth/expo` (session cookie in `expo-secure-store`, attached as a `Cookie` header — RN has no browser cookie jar). Realtime via `react-native-sse` with the cookie header.
+- **`shared/`** — Zod schemas imported by all three.
 
 Key security-relevant facts from the project:
 
@@ -31,6 +32,7 @@ Key security-relevant facts from the project:
 - Never run `npm audit fix --force`.
 - Destructive Prisma operations require explicit user consent via env var.
 - The product uses GLM 5.2 via Zhipu for LLM features and `embedding-3` for RAG over pgvector.
+- Mobile auth: the `expo()` plugin + `ticketly://` scheme in `trustedOrigins` (`api/src/auth/auth.config.ts`). The session cookie must be stored in `expo-secure-store` (OS keychain/keystore), never `AsyncStorage`. RN requests bypass browser CORS, so the cookie is attached manually via `authClient.getCookie()`.
 
 ## What to Look For
 
@@ -90,6 +92,16 @@ Key security-relevant facts from the project:
 - Missing file type/size validation.
 - User-controlled filenames used directly.
 - Files served from same origin without Content-Disposition.
+
+### 9. Mobile / React Native Security
+
+- Session token/cookie stored anywhere other than `expo-secure-store` (e.g. `AsyncStorage`, or a hand-rolled store) — must be OS keychain/keystore-backed via the `expoClient` plugin.
+- Deep-link / URL-scheme hijacking — the `ticketly://` scheme and any deep-link handlers must not auto-execute privileged actions or trust unvalidated params.
+- Cleartext traffic — `NSAppTransportSecurity` / Android `usesCleartextTraffic` must not be relaxed; `EXPO_PUBLIC_API_URL` must be HTTPS in production.
+- `expo-updates` OTA signing — if configured, the signing key must not be committed; unsigned OTA updates are a code-injection vector.
+- Secrets baked into the JS bundle — `EXPO_PUBLIC_*` vars are inlined and extractable from the shipped binary; only public values, never server secrets.
+- Missing certificate pinning for the API (consider for higher-risk deployments).
+- Stale session handling — the cookie can rotate server-side; verify the axios interceptor re-reads `getCookie()` per request and the SSE stream reconnects with a fresh cookie.
 
 ## Review Methodology
 

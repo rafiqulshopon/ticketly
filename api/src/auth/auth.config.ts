@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { admin } from "better-auth/plugins";
+import { expo } from "@better-auth/expo";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client";
@@ -37,8 +38,15 @@ export const auth = betterAuth({
   // only POST /api/auth/sign-up/email; sign-in and all other routes still work.
   emailAndPassword: { enabled: true, disableSignUp: true },
   // Required for Better Auth's origin/CSRF check (separate from the CORS
-  // headers applied in main.ts). Mirrors the CORS origin allowlist.
-  trustedOrigins: (process.env.WEB_ORIGIN ?? "http://localhost:5173").split(","),
+  // headers applied in main.ts). Mirrors the CORS origin allowlist, plus the
+  // mobile app's deep-link scheme so the @better-auth/expo client (React
+  // Native) passes the origin check. In dev, Expo uses exp:// with the host's
+  // LAN IP — trust those wildcards locally only.
+  trustedOrigins: [
+    ...(process.env.WEB_ORIGIN ?? "http://localhost:5173").split(","),
+    "ticketly://",
+    ...(process.env.NODE_ENV === "development" ? ["exp://", "exp://**"] : []),
+  ],
   // Rate limiting — temporarily disabled. To re-enable, un-comment the block below.
   // Better Auth enables this in production only by default; we force it on so
   // dev/staging are protected too (in-memory store resets on restart, so dev friction
@@ -52,7 +60,11 @@ export const auth = betterAuth({
   //   },
   // },
   // defaultRole "agent" aligns with the Role enum; admins are set via seed/createUser.
-  plugins: [admin({ defaultRole: "agent" })],
+  // expo() enables the @better-auth/expo React Native client: it lets the mobile
+  // app persist the session cookie in SecureStore and attach it as a Cookie header
+  // to API + SSE requests (RN has no browser cookie jar). Web is unaffected —
+  // cookies still work alongside this. Reuses the existing DB Session table.
+  plugins: [admin({ defaultRole: "agent" }), expo()],
 });
 
 export type Auth = typeof auth;

@@ -1,0 +1,109 @@
+/*
+ * Ticketly "Signal" design tokens — ported from web/src/index.css.
+ *
+ * NativeWind v4 (Tailwind v3) uses `@tailwind` directives instead of the
+ * web's `@import "tailwindcss"` (v4), but the CSS-variable token VALUES are
+ * identical, and tailwind.config.js maps them onto the same utility names.
+ * One brand rule: emerald is reserved for "the AI acted here".
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #fbfcfd; /* cool paper */
+  --foreground: #0b1220; /* ink */
+  --card: #ffffff;
+  --card-foreground: #0b1220;
+  --popover: #ffffff;
+  --popover-foreground: #0b1220;
+  --primary: #0b1220; /* ink — primary actions */
+  --primary-foreground: #ffffff;
+  --secondary: #f1f4f8; /* cool light surface */
+  --secondary-foreground: #0b1220;
+  --muted: #f1f4f8;
+  --muted-foreground: #5b6776;
+  --accent: #f1f4f8;
+  --accent-foreground: #0b1220;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #e5e9f0;
+  --input: #e5e9f0;
+  --ring: #94a3b8;
+
+  /* AI brand signal (emerald). */
+  --ai: #0e9f6e;
+  --ai-foreground: #062c1d;
+  --ai-soft: #e8f7f0;
+  --ai-soft-foreground: #066c49;
+
+  /* Semantic ticket-state palette. */
+  --success: #0e9f6e;
+  --success-foreground: #ffffff;
+  --warning: #d97706;
+  --warning-foreground: #ffffff;
+  --info: #2563eb;
+  --info-foreground: #ffffff;
+  --indigo: #4f46e5;
+  --indigo-foreground: #ffffff;
+
+  /* Accessible text shades for soft tinted badges (deep on tint, AA). */
+  --success-fg: #065f46;
+  --warning-fg: #92400e;
+  --info-fg: #1d4ed8;
+  --indigo-fg: #4338ca;
+
+  --radius: 0.625rem;
+
+  --font-sans: "Mona Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, Monaco,
+    Consolas, monospace;
+}
+
+.dark {
+  --background: #0b1220;
+  --foreground: #e8edf6;
+  --card: #111a2c;
+  --card-foreground: #e8edf6;
+  --popover: #111a2c;
+  --popover-foreground: #e8edf6;
+  --primary: #e8edf6;
+  --primary-foreground: #0b1220;
+  --secondary: #1a2438;
+  --secondary-foreground: #e8edf6;
+  --muted: #1a2438;
+  --muted-foreground: #94a3b8;
+  --accent: #1a2438;
+  --accent-foreground: #e8edf6;
+  --destructive: #f87171;
+  --destructive-foreground: #0b1220;
+  --border: #1f2a40;
+  --input: #243049;
+  --ring: #64748b;
+
+  --ai: #34d399;
+  --ai-foreground: #04140d;
+  --ai-soft: rgba(52, 211, 153, 0.12);
+  --ai-soft-foreground: #6ee7b7;
+
+  --success: #34d399;
+  --success-foreground: #04140d;
+  --warning: #fbbf24;
+  --warning-foreground: #1a1300;
+  --info: #60a5fa;
+  --info-foreground: #04101f;
+  --indigo: #818cf8;
+  --indigo-foreground: #0a0f2b;
+
+  --success-fg: #6ee7b7;
+  --warning-fg: #fcd34d;
+  --info-fg: #93c5fd;
+  --indigo-fg: #c7d2fe;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+}
