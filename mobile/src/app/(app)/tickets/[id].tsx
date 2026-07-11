@@ -1,7 +1,7 @@
-import { useLayoutEffect, useOptimistic, useState } from "react";
+import { useOptimistic, useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router, useLocalSearchParams, useNavigation } from "expo-router";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import type { TicketMessage } from "@ticketly/shared";
 import { ApiError, getTicket } from "@/lib/api";
@@ -17,17 +17,13 @@ type Tab = "conversation" | "activity" | "properties";
 
 /** Ticket detail — full conversation thread, optimistic reply + AI polish/
  *  summarize, inline property edits, and an Activity timeline. Replaces the M0
- *  stub. The header is hidden in favour of an in-content bar (the route sits
- *  inside the Tickets tab, which has no stack back affordance). */
+ *  stub. Lives under the Tickets tab's Stack (tickets/_layout.tsx); the Stack
+ *  header is hidden in favour of an in-content back bar. A non-numeric id
+ *  (stale deep link) Redirects to the inbox rather than render "Ticket #NaN". */
 export default function TicketDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const ticketId = Number(id);
-  const navigation = useNavigation();
   const [tab, setTab] = useState<Tab>("conversation");
-
-  useLayoutEffect(() => {
-    navigation.setOptions({ headerShown: false, title: `Ticket #${ticketId}` });
-  }, [navigation, ticketId]);
 
   const { data: ticket, isLoading, error, refetch } = useQuery({
     queryKey: ["ticket", ticketId],
@@ -35,6 +31,11 @@ export default function TicketDetailScreen() {
     enabled: Number.isFinite(ticketId),
     retry: (failureCount, err) => !(err instanceof ApiError) && failureCount < 2,
   });
+
+  // Reached without a numeric id (stale deep link / nav glitch) → bounce to the inbox.
+  if (!Number.isFinite(ticketId)) {
+    return <Redirect href="/tickets" />;
+  }
 
   return (
     <SafeAreaView edges={["top"]} className="flex-1 bg-background">

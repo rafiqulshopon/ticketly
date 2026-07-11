@@ -35,15 +35,18 @@ export default function AppLayout() {
       {/* RoleRedirect — hidden from the tab bar; the initial route. */}
       <Tabs.Screen name="index" options={{ href: null, headerShown: false }} />
       <Tabs.Screen
-        name="tickets"
-        options={{ title: "Tickets", tabBarIcon: ({ color, size }) => <Inbox color={color} size={size} /> }}
-      />
-      <Tabs.Screen
         name="dashboard"
         options={{
           title: "Dashboard",
           href: admin ? undefined : null,
           tabBarIcon: ({ color, size }) => <LayoutDashboard color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="tickets"
+        options={{
+          title: "Tickets",
+          tabBarIcon: ({ color, size }) => <Inbox color={color} size={size} />,
         }}
       />
       <Tabs.Screen
