@@ -94,16 +94,69 @@ every request. The backend enables this with the `expo()` plugin + the
 `ticketly://` scheme in `trustedOrigins` (`api/src/auth/auth.config.ts`); the
 web's cookie flow is unchanged.
 
+### Running the mobile app
+
+The app talks **directly** to the API (there's no dev proxy on a device), so the
+API must be running and reachable from wherever the app runs. Expo inlines
+`EXPO_PUBLIC_*` values at bundle time, so you set the URL in `mobile/.env` first,
+then start Metro.
+
+**Prerequisites:**
+- The API running in another terminal: `npm run dev` (api on `:3000`), with a
+  seeded admin (`npm run db:seed`). You'll log in with those creds.
+- `cp mobile/.env.example mobile/.env`, then set `EXPO_PUBLIC_API_URL` per the table below.
+- **Physical phone** → install the free **Expo Go** app (App Store / Play Store).
+  **iOS Simulator** → Xcode (open it once to accept the license, or
+  `sudo xcodebuild -license`). **Android Emulator** → Android Studio with an AVD.
+
+**1. Set `EXPO_PUBLIC_API_URL`** (full API origin, no `/api`):
+
+| Target | `EXPO_PUBLIC_API_URL` |
+| --- | --- |
+| iOS Simulator (this Mac) | `http://localhost:3000` |
+| Android Emulator (this Mac) | `http://10.0.2.2:3000` |
+| Physical iPhone or Android (same Wi-Fi) | `http://<your-Mac-LAN-IP>:3000` |
+
 ```bash
-# Configure env (FULL API origin — no dev proxy on a device)
-cp mobile/.env.example mobile/.env
-#   EXPO_PUBLIC_API_URL=http://localhost:3000   # iOS simulator
-#   EXPO_PUBLIC_API_URL=http://<your-LAN-IP>:3000  # physical device
+# Find your Mac's LAN IP (en0 is Wi-Fi on most Macs; try en1 if it's blank):
+ipconfig getifaddr en0
+```
 
-# Start the packager (separate from api+web)
+> Changed `mobile/.env`? **Restart `npm run dev:mobile`** — Expo bakes the value
+> into the bundle at startup, so the running packager won't pick up edits.
+
+**2. Start Metro** (a separate terminal from `npm run dev`):
+
+```bash
 npm run dev:mobile                  # → npx expo start
-#   press i (iOS sim), a (Android), or scan the QR with Expo Go
+```
 
+**3. Launch on a device:**
+- **iOS Simulator** — press `i`. Runs natively on Apple Silicon (M1–M4, including
+  the Mac mini M4); the first launch downloads the Simulator boot files.
+- **Android Emulator** — press `a` (start an AVD in Android Studio first).
+- **Physical iPhone** — scan the terminal QR with the iOS **Camera** app, then tap
+  the notification to open it in Expo Go.
+- **Physical Android** — open **Expo Go** → "Scan QR code" → scan the terminal QR.
+
+Log in with the seeded admin (or an agent account created via the web admin UI —
+registration is closed). After login, Better Auth redirects back into the app via
+the `ticketly://` scheme.
+
+**Troubleshooting:**
+- **"Network request failed" / bundle won't load on a phone** — the phone can't
+  reach the Mac. Both must be on the same Wi-Fi, the LAN IP must be correct, and
+  macOS must allow incoming connections for Node (System Settings → Network →
+  Firewall — accept the prompt when it appears). Guest/corporate Wi-Fi often
+  isolates clients; use a home network or a phone hotspot.
+- **Login 401 / blank screen** — confirm the phone's browser can open
+  `http://<EXPO_PUBLIC_API_URL>/health` and gets JSON back. If not, the API isn't
+  reachable (or `EXPO_PUBLIC_API_URL` is wrong / the packager wasn't restarted).
+- **Simulator can't reach the API** — make sure `npm run dev` (the API) is
+  actually running; the Simulator shares the Mac's `localhost`, so
+  `http://localhost:3000` should work without any firewall changes.
+
+```bash
 npx expo install --fix              # align expo-* / react-native-* versions after install, if needed
 ```
 
