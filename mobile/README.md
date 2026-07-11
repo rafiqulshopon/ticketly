@@ -29,7 +29,7 @@ via an axios interceptor (`src/lib/api.ts`). The backend enables this with the
 
 ## Status
 
-**M0 — foundations + auth** is done (login, authed tab shell, tickets list +
-detail smoke-test, realtime SSE hook). Feature work is phased in
-[implementation-plan.md](../implementation-plan.md); full conventions are in the
+**M0 — foundations + auth** is done. Detailed progress (what's built, decisions,
+and M1–M4 sub-tasks) lives in [PROGRESS.md](./PROGRESS.md); the milestone view is
+in [implementation-plan.md](../implementation-plan.md); conventions are in the
 root [CLAUDE.md](../CLAUDE.md).
