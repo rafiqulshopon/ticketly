@@ -27,6 +27,7 @@
   --accent-foreground: #0b1220;
   --destructive: #dc2626;
   --destructive-foreground: #ffffff;
+  --destructive-soft: #fde8e8;
   --border: #e5e9f0;
   --input: #e5e9f0;
   --ring: #94a3b8;
@@ -53,6 +54,15 @@
   --info-fg: #1d4ed8;
   --indigo-fg: #4338ca;
 
+  /* Soft tinted backgrounds for the semantic badge variants (the web renders
+     these with the `/10` opacity modifier; on NativeWind we use explicit tokens
+     mirroring --ai-soft so the tint is guaranteed regardless of the
+     opacity-on-CSS-var support). */
+  --success-soft: #e6f6f0;
+  --warning-soft: #fdf2e6;
+  --info-soft: #e8effe;
+  --indigo-soft: #eceafe;
+
   --radius: 0.625rem;
 
   --font-sans: "Mona Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
@@ -78,6 +88,7 @@
   --accent-foreground: #e8edf6;
   --destructive: #f87171;
   --destructive-foreground: #0b1220;
+  --destructive-soft: rgba(248, 113, 113, 0.14);
   --border: #1f2a40;
   --input: #243049;
   --ring: #64748b;
@@ -100,6 +111,12 @@
   --warning-fg: #fcd34d;
   --info-fg: #93c5fd;
   --indigo-fg: #c7d2fe;
+
+  /* Soft tinted badge backgrounds (rgba tints over the dark ink surface). */
+  --success-soft: rgba(52, 211, 153, 0.14);
+  --warning-soft: rgba(251, 191, 36, 0.14);
+  --info-soft: rgba(96, 165, 250, 0.14);
+  --indigo-soft: rgba(129, 140, 248, 0.14);
 }
 
 @layer base {

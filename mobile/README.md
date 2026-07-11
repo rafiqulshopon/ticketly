@@ -29,7 +29,10 @@ via an axios interceptor (`src/lib/api.ts`). The backend enables this with the
 
 ## Status
 
-**M0 — foundations + auth** is done. Detailed progress (what's built, decisions,
-and M1–M4 sub-tasks) lives in [PROGRESS.md](./PROGRESS.md); the milestone view is
-in [implementation-plan.md](../implementation-plan.md); conventions are in the
-root [CLAUDE.md](../CLAUDE.md).
+**M0 — foundations + auth** and **M1 — tickets** (full list + detail: search,
+server sort/filter/paginate, role-aware statuses, conversation thread, optimistic
+reply, AI polish + summarize, inline property edits, Activity tab, realtime SSE)
+are done. Detailed progress (what's built, decisions, and M2–M4 sub-tasks) lives
+in [PROGRESS.md](./PROGRESS.md); the milestone view is in
+[implementation-plan.md](../implementation-plan.md); conventions are in the root
+[CLAUDE.md](../CLAUDE.md).

@@ -28,6 +28,7 @@ module.exports = {
         destructive: {
           DEFAULT: "var(--destructive)",
           foreground: "var(--destructive-foreground)",
+          soft: "var(--destructive-soft)",
         },
         muted: {
           DEFAULT: "var(--muted)",
@@ -56,21 +57,25 @@ module.exports = {
           DEFAULT: "var(--success)",
           foreground: "var(--success-foreground)",
           fg: "var(--success-fg)",
+          soft: "var(--success-soft)",
         },
         warning: {
           DEFAULT: "var(--warning)",
           foreground: "var(--warning-foreground)",
           fg: "var(--warning-fg)",
+          soft: "var(--warning-soft)",
         },
         info: {
           DEFAULT: "var(--info)",
           foreground: "var(--info-foreground)",
           fg: "var(--info-fg)",
+          soft: "var(--info-soft)",
         },
         indigo: {
           DEFAULT: "var(--indigo)",
           foreground: "var(--indigo-foreground)",
           fg: "var(--indigo-fg)",
+          soft: "var(--indigo-soft)",
         },
       },
       borderRadius: {

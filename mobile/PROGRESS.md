@@ -6,7 +6,7 @@ milestone view; **this file is the granular tracker** — what's built, what's
 next, and the decisions worth not losing. Conventions live in the root
 [CLAUDE.md](../CLAUDE.md).
 
-**Last updated:** 2026-07-11 · **Current milestone:** M0 ✅ complete → M1 next
+**Last updated:** 2026-07-11 · **Current milestone:** M1 ✅ complete → M2 next
 
 ---
 
@@ -58,23 +58,52 @@ cookie jar, so the API had to learn the Expo client):
 
 ---
 
-## M1 — Tickets ⬜ NEXT
+## M1 — Tickets ✅ COMPLETE
 
-- [ ] Tickets list: debounced search (300ms)
-- [ ] Tickets list: server-side sort UI (`sortBy` / `sortDir`)
-- [ ] Tickets list: filters (status / category / priority / assignee)
-- [ ] Tickets list: pagination (`page` / `pageSize`, `keepPreviousData`)
-- [ ] Tickets list: role-aware statuses (agents hide `NEW` / `PROCESSING`)
-- [ ] Ticket detail: message thread + smooth auto-scroll
-- [ ] Ticket detail: reply form (optimistic via `useOptimistic` + `replyToTicket`)
-- [ ] Ticket detail: AI polish (`polishReply`)
-- [ ] Ticket detail: AI summarize (`summarizeTicket`)
-- [ ] Ticket detail: inline property edits (status / priority / category / assignee)
-- [ ] Ticket detail: Activity tab (`getTicketActivity`)
-- [ ] Realtime SSE wired into the detail page (live message append + activity prepend)
-- [ ] Ticket-badges component (status/priority → semantic colors; port from `web/src/components/tickets/ticket-badges.ts`)
-- [ ] Replace the tickets list/detail smoke-tests with the full UI
-- [ ] Jest + `@testing-library/react-native` setup + first component test
+Verified 2026-07-11: `tsc --noEmit` (mobile), `eslint . --max-warnings 0` (mobile),
+`jest` (6/6), and `npx expo export --platform ios` (3836 modules) all pass.
+
+- [x] Tickets list: debounced search (300ms)
+- [x] Tickets list: server-side sort UI (`sortBy` / `sortDir`)
+- [x] Tickets list: filters (status / category / priority / assignee)
+- [x] Tickets list: pagination (`page` / `pageSize`, `keepPreviousData`)
+- [x] Tickets list: role-aware statuses (agents hide `NEW` / `PROCESSING`)
+- [x] Ticket detail: message thread + smooth auto-scroll
+- [x] Ticket detail: reply form (optimistic via `useOptimistic` + `replyToTicket`)
+- [x] Ticket detail: AI polish (`polishReply`)
+- [x] Ticket detail: AI summarize (`summarizeTicket`)
+- [x] Ticket detail: inline property edits (status / priority / category / assignee)
+- [x] Ticket detail: Activity tab (`getTicketActivity`)
+- [x] Realtime SSE wired into the detail page (live message append + activity prepend)
+- [x] Ticket-badges component (status/priority → semantic colors; port from `web/src/components/tickets/ticket-badges.ts`)
+- [x] Replace the tickets list/detail smoke-tests with the full UI
+- [x] Jest + `@testing-library/react-native` setup + first component test
+
+### What was built
+
+All a UI/feature build on the M0 infra (every endpoint + the SSE hook already
+existed) — no new API plumbing.
+
+- **UI primitives** — [src/components/ui/](./src/components/ui/): `Badge`, `Button`, `Card`(+Header/Title/Content), `Avatar`, `Segmented`, `Field`/`TextField`, a bottom-sheet `Select` (RN has no Radix). Plus [src/lib/cx.ts](./src/lib/cx.ts) (the NativeWind `cn`) and [src/lib/colors.ts](./src/lib/colors.ts) (`useIconColor` — lucide's `color` prop needs a literal, so this mirrors the tokens per color scheme).
+- **Tickets feature components** — [src/components/tickets/](./src/components/tickets/): `ticket-badges.ts` (port), `ticket-messages.tsx` (thread + smooth `scrollToEnd`), `reply-form.tsx` (optimistic + AI polish), `ticket-summary.tsx` (AI summarize), `property-select.tsx` + `assignee-select.tsx` (inline edits), `ticket-activity.tsx`, `ticket-properties.tsx`.
+- **Screen rewrites** — [tickets/index.tsx](<./src/app/(app)/tickets/index.tsx>) (debounced search, server sort/filter/paginate, role-aware statuses, `keepPreviousData`), [tickets/[id].tsx](<./src/app/(app)/tickets/[id].tsx>) (Conversation/Activity/Properties tabs, `useOptimistic` lifted, `KeyboardAvoidingView`).
+- **Tests** — [jest.config.js](./jest.config.js) (`jest-expo` preset), [jest.setup.ts](./jest.setup.ts), and the first test [ticket-badges.test.ts](./src/components/tickets/ticket-badges.test.ts) (6 assertions).
+- **Tokens** — added soft semantic backgrounds (`--*-soft`) to [src/global.css](./src/global.css) + [tailwind.config.js](./tailwind.config.js) so the Badge variants are tinted without relying on NativeWind's `/opacity`-on-CSS-var behavior.
+
+### Decisions worth not losing
+
+- **Detail layout = 3 tabs (Conversation / Activity / Properties)**, not the web's 2-column thread + sticky sidebar. The in-content header replaces the hidden route header (the Tickets tab has no stack back affordance). The reply form is pinned at the bottom of the Conversation tab with `KeyboardAvoidingView`.
+- **Select = bottom sheet** via `react-native-modal` (^14.0.0-rc.1 — Expo's `expo install` picked the RC; downgrade to 13.x if it misbehaves in M2). One component reused for every list filter and every inline property edit; sentinel `__none__` → null.
+- **Soft badge tokens, not `/opacity`** — NativeWind's opacity modifier over CSS-var colors is unreliable, so the semantic Badge variants use explicit `--*-soft` bg + `-*-fg` text tokens (values identical to the web's `/10` tints).
+- **`crypto.randomUUID()` doesn't exist in Hermes** — the optimistic message id is `optimistic-${Date.now()}-${Math.random()…}`.
+- **M1 #12 (SSE into detail) was already done in M0** — `use-realtime-events.ts` appends `new_message` into `["ticket", id]` and prepends `ticket_activity` into `["ticket-activity", id]` when the user is on that detail screen; M1 just kept the cache keys aligned.
+- **Test files need `/// <reference types="jest" />`** — `@types/jest` globals don't auto-surface under the Expo tsconfig base, so each `*.test.ts` carries the triple-slash directive.
+
+### Known gaps / flagged (not blocking M2)
+
+- **No manual device run yet** — all four build gates pass, but the flow hasn't been driven on a simulator/device end-to-end (reply, polish, summarize, inline edits, live SSE). Do this before M2.
+- Loading/empty/error states are minimal text (M4 hardening will unify them); the list has no pull-to-refresh (M4).
+- `react-native-modal ^14.0.0-rc.1` is an RC — watch for regressions.
 
 ## M2 — Notifications & shell ⬜
 
