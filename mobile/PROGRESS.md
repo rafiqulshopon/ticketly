@@ -6,7 +6,7 @@ milestone view; **this file is the granular tracker** — what's built, what's
 next, and the decisions worth not losing. Conventions live in the root
 [CLAUDE.md](../CLAUDE.md).
 
-**Last updated:** 2026-07-11 · **Current milestone:** M2 ✅ complete → M3 next
+**Last updated:** 2026-07-12 · **Current milestone:** M3 ✅ complete → M4 next
 
 ---
 
@@ -145,13 +145,51 @@ existed. No backend changes.
 - **In-screen admin guards on `dashboard.tsx`/`users.tsx` deferred to M3** — tab hiding (`href: null`) ≠ route guard; an agent deep-linking to `/(app)/dashboard` would still render the stub. Harmless today (stubs render nothing sensitive); add `isAdmin` redirects when those screens are built in M3.
 - **Cold-launch edge** — `useUnreadNotificationCount` mounts in `_layout` during `isPending`, so its first fetch may 401 before the session cookie loads. Silent (no retry on `ApiError`); self-heals via the 30s poll / SSE invalidation / tab switch. Gate on session in a later pass if it matters.
 
-## M3 — Admin ⬜
+## M3 — Admin ✅ COMPLETE
 
-- [ ] Dashboard: stat cards (`getDashboardStats`)
-- [ ] Dashboard: tickets-per-day bar chart (`victory-native`)
-- [ ] Users: list (`getUsers`) with search + paginate
-- [ ] Users: create/edit (`react-hook-form` + zod)
-- [ ] Users: delete (confirm dialog)
+Verified 2026-07-12: `tsc --noEmit` (mobile), `eslint . --max-warnings 0` (mobile),
+`jest` (13/13), and `npx expo export --platform ios` (4627 modules — victory-native + Skia
+resolved cleanly) all pass.
+
+- [x] Dashboard: stat cards (`getDashboardStats`)
+- [x] Dashboard: tickets-per-day bar chart (`victory-native`)
+- [x] Users: list (`getUsers`) with search + paginate
+- [x] Users: create/edit (`react-hook-form` + zod)
+- [x] Users: delete (confirm dialog)
+- [x] Carryover: in-screen `isAdmin` guards kept on `dashboard.tsx`/`users.tsx` (stubs replaced with guarded screens)
+- [x] Dashboard stat-card deep-links (`/tickets?view=…`) wired into the M1 tickets screen
+
+### What was built
+
+A UI build on the existing data layer — `getDashboardStats`, `getUsers`, `createUser`, `updateUser`, `deleteUser` were already wired in [src/lib/api.ts](./src/lib/api.ts) and the shared `DashboardStats`/`UserListItem`/`createUserSchema`/`editUserSchema` schemas already importable. No backend, shared-package, or web changes.
+
+- **Dashboard** — [src/app/(app)/dashboard.tsx](<./src/app/(app)/dashboard.tsx>): `useQuery(["dashboard","stats"], getDashboardStats)` + ApiError-aware retry + AbortSignal; loading → `ActivityIndicator`, error → `text-destructive` + "Try again". Five stat cards in a 2-column layout, then the chart.
+- **Stat card** — [src/components/dashboard/stat-card.tsx](./src/components/dashboard/stat-card.tsx): `Pressable`→`Card`, icon chip (`bg-secondary` / `bg-ai-soft` for AI tone), `flex-1` so cards fill the row. Tapping navigates to `/tickets?view=…` (Total→all, Open→open, Resolved by AI→resolvedByAi; AI rate + avg resolution time are non-interactive).
+- **Chart** — [src/components/dashboard/tickets-per-day-chart.tsx](./src/components/dashboard/tickets-per-day-chart.tsx): victory-native `CartesianChart` + `Bar` port of the web's recharts chart. Token colors via `useIconColor` (Skia needs concrete hex); axis labels via `matchFont({ fontSize: 11 })` (system font, no bundled TTF). Y domain pinned `[0, max]` (web's `allowDecimals={false}`); static for v1 (no press tooltip).
+- **Users** — [src/app/(app)/users.tsx](<./src/app/(app)/users.tsx>): debounced search (300 ms) + paginated `FlatList` (`PAGE_SIZE=20`, `keepPreviousData`); pager footer (Prev/Next + "Page X of Y"); create/edit/delete via three modals.
+- **User row** — [src/components/users/user-row.tsx](./src/components/users/user-row.tsx): avatar+initials, name, email, role Badge (admin/agent), status Badge (banned/active), joined date; edit + delete actions (delete disabled for admins).
+- **User form** — [src/components/users/user-form.tsx](./src/components/users/user-form.tsx): one `mode: "create" | "edit"` component, RHF + zodResolver (`createUserSchema`/`editUserSchema`) with `<Controller>` per field (RN has no `register`); closes on success only, surfaces 409/404/403/400; success toast.
+- **Delete confirm** — [src/components/users/delete-user-confirm.tsx](./src/components/users/delete-user-confirm.tsx): destructive `Button variant="destructive"`; 400 → "Admins cannot be deleted."; invalidates `["users"]`; success toast.
+- **Modal primitive** — [src/components/ui/modal.tsx](./src/components/ui/modal.tsx): centered `react-native-modal` (not a bottom sheet) with optional `KeyboardAvoidingView` (`avoidKeyboard`) for forms; serves both dialogs. Exported from the ui barrel. The `Select` keeps its own bottom sheet.
+- **Button destructive variant** — [src/components/ui/button.tsx](./src/components/ui/button.tsx): added `destructive` (`bg-destructive` / `text-destructive-foreground`) — mirrors the web.
+- **Tickets deep-link** — [src/app/(app)/tickets/index.tsx](<./src/app/(app)/tickets/index.tsx>): reads `view` from `useLocalSearchParams`, passes it to `getTickets`, resets to page 1 when it changes (render-time "previous value" pattern — not an effect, to satisfy `set-state-in-effect`), suppresses the manual `status` filter while a view is active, and shows a dismissible "Showing: …" chip.
+- **Test** — [src/components/users/user-row.test.tsx](./src/components/users/user-row.test.tsx): 3 assertions (renders name/email/role/status; admin delete disabled + agent enabled; banned → "Banned"). Stubs `lucide-react-native`.
+
+### Decisions worth not losing
+
+- **Chart lib = `victory-native` (per plan)** — considered a zero-dep View-based bar chart (Skia is heavy and carries a live Skia-v2 / RN-0.86 compatibility risk, issue #616); the plan names victory-native and the user confirmed. Installed via `npx expo install victory-native @shopify/react-native-skia` (NOT bare npm — ERESOLVE on the Skia peer); resolved to victory-native ^41.26.0 + Skia 2.6.2. `reanimated` / `gesture-handler` already present; no d3 deps (victory-native bundles them).
+- **`matchFont` for axis labels** — Skia axis labels need a `SkFont`; `matchFont({ fontSize: 11 })` returns the system font (no TTF bundle). The font line is isolated so the fallback (bundled TTF via `useFont`, or bars-only + RN `<Text>` ticks) is a one-line swap if `matchFont` misbehaves on a device.
+- **Centered modal, not a bottom sheet** — the user form has three `TextInput`s; a bottom sheet fights the keyboard. A centered modal in a `KeyboardAvoidingView` lifts cleanly and matches the web's `Dialog`.
+- **Stat-card deep-links use a `view` query param** — the mobile tickets screen used local filter state and ignored `view`; M3 wires it (`getTickets` already accepted `view`). While a view is active the manual `status` filter is suppressed (the server ignores `view` once `status` is set) and a dismissible chip explains the override.
+- **Page reset on `view` change uses the render-time "previous value" pattern** — `react-hooks/set-state-in-effect` (eslint-plugin-react-hooks v7) flags synchronous `setState` in an effect; the React-endorsed `if (view !== prevView) { setPrevView(view); setPage(1); }` during render satisfies it.
+- **No role picker** — `createUserSchema` / `editUserSchema` have no role field; new users join as agents (server default). Mirrors the web exactly.
+- **`disabled` isn't exposed on a `Pressable` host view** — tests assert `accessibilityState.disabled` (set explicitly), not `props.disabled`.
+
+### Known gaps / flagged (not blocking M4)
+
+- **No manual device run yet** — all four build gates pass, but the dashboard chart, stat-card deep-links, and user CRUD haven't been driven on a simulator end-to-end. Skia's first native build is long (~10 min, New Arch). Do this before M4. (M1/M2 manual runs are also still pending.)
+- **Skia axis-label font unverified on-device** — `matchFont` returns the system font; confirm labels render on iOS/Android. Fallbacks documented in the chart component.
+- **Long first native build** — adding Skia means the first `expo run:ios` / EAS build compiles Skia (~10 min, large prebuild). Expectation only.
 
 ## M4 — Hardening ⬜
 

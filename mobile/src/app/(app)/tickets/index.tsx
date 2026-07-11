@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, ScrollView, Text, View } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ticketCategoryEnum, type TicketListItem } from "@ticketly/shared";
 import { ApiError, getAssignees, getTickets } from "@/lib/api";
 import { isAdmin, useSession } from "@/lib/auth";
 import { relativeTime } from "@/lib/format";
 import { Badge, Select, type SelectOption, TextField } from "@/components/ui";
-import { PRIORITY_BADGES, STATUS_BADGES, prettifyEnum } from "@/components/tickets/ticket-badges";
+import { PRIORITY_BADGES, STATUS_BADGES, TICKET_VIEW_LABELS, prettifyEnum } from "@/components/tickets/ticket-badges";
 
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -44,6 +44,10 @@ function cap(role: string): string {
 export default function TicketsScreen() {
   const { data: session } = useSession();
   const admin = isAdmin(session?.user?.role);
+  // Dashboard deep-link: ?view=all|open|resolvedByAi. While present, the server
+  // bucket wins and the manual status filter is suppressed — the server ignores
+  // `view` once `status` is set, so we withhold `status` to let the view apply.
+  const { view } = useLocalSearchParams<{ view?: "all" | "open" | "resolvedByAi" }>();
 
   // `query` is the raw input; `search` is the debounced value used as the query
   // key. Typing updates the input immediately but only requests once the user
@@ -65,13 +69,22 @@ export default function TicketsScreen() {
     return () => clearTimeout(t);
   }, [query]);
 
+  // A new view bucket (deep-link) starts on page 1. Adjusted during render via
+  // the "previous value" pattern rather than in an effect — a synchronous
+  // setState-in-effect would trip react-hooks/set-state-in-effect.
+  const [prevView, setPrevView] = useState(view);
+  if (view !== prevView) {
+    setPrevView(view);
+    setPage(1);
+  }
+
   const sort = SORT_OPTIONS.find((s) => s.value === sortKey) ?? SORT_OPTIONS[0];
 
   // keepPreviousData keeps the old rows visible while a new page/search/sort
   // loads instead of flashing a spinner. The AbortSignal cancels superseded
   // requests. The server does the ORDER BY + filtering.
   const { data, isPending, isError, error, refetch } = useQuery({
-    queryKey: ["tickets", search, page, sort.sortBy, sort.sortDir, status, category, priority, assigneeId],
+    queryKey: ["tickets", search, page, sort.sortBy, sort.sortDir, status, category, priority, assigneeId, view ?? null],
     queryFn: ({ signal }) =>
       getTickets(
         {
@@ -80,10 +93,11 @@ export default function TicketsScreen() {
           pageSize: PAGE_SIZE,
           sortBy: sort.sortBy,
           sortDir: sort.sortDir,
-          status: status ?? undefined,
+          status: view ? undefined : (status ?? undefined),
           category: category ?? undefined,
           priority: priority ?? undefined,
           assigneeId: assigneeId ?? undefined,
+          view: view || undefined,
         },
         { signal },
       ),
@@ -148,6 +162,21 @@ export default function TicketsScreen() {
           <Text className="mt-1 text-sm text-muted-foreground">
             {total} {total === 1 ? "ticket" : "tickets"}
           </Text>
+
+          {view ? (
+            <View className="mt-3 flex flex-row items-center gap-2 self-start rounded-full bg-secondary px-3 py-1">
+              <Text className="text-xs text-secondary-foreground">
+                Showing: {TICKET_VIEW_LABELS[view] ?? view}
+              </Text>
+              <Pressable
+                hitSlop={8}
+                onPress={() => router.setParams({ view: undefined })}
+                accessibilityLabel="Clear filter"
+              >
+                <Text className="text-xs text-secondary-foreground">✕</Text>
+              </Pressable>
+            </View>
+          ) : null}
 
           <TextField
             value={query}

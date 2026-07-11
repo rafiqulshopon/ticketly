@@ -5,3 +5,4 @@ export { Card, CardHeader, CardTitle, CardContent } from "./card";
 export { Segmented, type SegmentedOption } from "./segmented";
 export { Field, TextField } from "./field";
 export { Select, type SelectOption } from "./select";
+export { Modal } from "./modal";

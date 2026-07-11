@@ -2,18 +2,20 @@ import { type ComponentProps, type ReactNode } from "react";
 import { ActivityIndicator, Pressable, Text } from "react-native";
 import { cx } from "@/lib/cx";
 
-export type ButtonVariant = "default" | "outline" | "ghost";
+export type ButtonVariant = "default" | "outline" | "ghost" | "destructive";
 export type ButtonSize = "default" | "sm";
 
 const VARIANTS: Record<ButtonVariant, string> = {
   default: "bg-primary",
   outline: "border border-input bg-transparent",
   ghost: "bg-transparent",
+  destructive: "bg-destructive",
 };
 const TEXT_VARIANTS: Record<ButtonVariant, string> = {
   default: "text-primary-foreground",
   outline: "text-foreground",
   ghost: "text-foreground",
+  destructive: "text-destructive-foreground",
 };
 const SIZES: Record<ButtonSize, string> = {
   default: "px-4 py-3",
