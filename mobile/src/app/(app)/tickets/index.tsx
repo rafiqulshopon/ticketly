@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { FlatList, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ticketCategoryEnum, type TicketListItem } from "@ticketly/shared";
@@ -48,8 +48,10 @@ export default function TicketsScreen() {
   const { data: session } = useSession();
   const admin = isAdmin(session?.user?.role);
   // The Tickets tab header is hidden (see (app)/_layout.tsx), so the inbox
-  // owns its top safe-area inset itself.
-  const insets = useSafeAreaInsets();
+  // owns its top safe-area inset itself — via a SafeAreaView wrapper. Wrapping
+  // (rather than a contentContainerStyle paddingTop) keeps the pull-to-refresh
+  // spinner below the status bar; padding the content instead renders the
+  // spinner at y=0, hidden behind the notch.
   // Dashboard deep-link: ?view=all|open|resolvedByAi. While present, the server
   // bucket wins and the manual status filter is suppressed — the server ignores
   // `view` once `status` is set, so we withhold `status` to let the view apply.
@@ -147,6 +149,7 @@ export default function TicketsScreen() {
   }
 
   return (
+    <SafeAreaView edges={["top"]} className="flex-1 bg-background">
     <FlatList
       className="bg-background"
       refreshControl={
@@ -159,7 +162,7 @@ export default function TicketsScreen() {
       }
       data={data?.items ?? []}
       keyExtractor={(t) => String(t.id)}
-      contentContainerStyle={{ paddingTop: insets.top + 16, paddingHorizontal: 16, paddingBottom: 16, gap: 10 }}
+      contentContainerStyle={{ paddingTop: 16, paddingHorizontal: 16, paddingBottom: 16, gap: 10 }}
       ListHeaderComponent={
         <View>
           <Text className="text-2xl font-semibold text-foreground">Tickets</Text>
@@ -259,6 +262,7 @@ export default function TicketsScreen() {
       }
       renderItem={({ item }) => <TicketRow ticket={item} />}
     />
+    </SafeAreaView>
   );
 }
 
