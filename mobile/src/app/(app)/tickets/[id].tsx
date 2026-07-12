@@ -1,12 +1,13 @@
-import { useOptimistic, useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Redirect, router, useLocalSearchParams } from "expo-router";
+import { useLayoutEffect, useOptimistic, useState } from "react";
+import { Pressable, ScrollView, Text, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { Redirect, router, useLocalSearchParams, useNavigation } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import type { TicketMessage } from "@ticketly/shared";
 import { getTicket } from "@/lib/api";
 import { toErrorMessage } from "@/lib/errors";
-import { Badge, ErrorState, LoadingState, Segmented } from "@/components/ui";
+import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
+import { Badge, ErrorState, KeyboardBottomSpacer, LoadingState, Segmented } from "@/components/ui";
 import { PRIORITY_BADGES, STATUS_BADGES } from "@/components/tickets/ticket-badges";
 import { TicketActivity } from "@/components/tickets/ticket-activity";
 import { TicketMessages } from "@/components/tickets/ticket-messages";
@@ -25,6 +26,20 @@ export default function TicketDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const ticketId = Number(id);
   const [tab, setTab] = useState<Tab>("conversation");
+  const navigation = useNavigation();
+
+  // Hide the bottom tab bar while a ticket is open: Messenger-style UX, and it
+  // removes the tab bar from the flex chain so the reply composer can sit flush
+  // above the keyboard. `getParent()` is the (app) Tabs navigator; the cleanup
+  // restores the tab bar on unmount (back/pop).
+  useLayoutEffect(() => {
+    const parent = navigation.getParent();
+    if (!parent) return;
+    parent.setOptions({ tabBarStyle: { display: "none" } });
+    return () => {
+      parent.setOptions({ tabBarStyle: undefined });
+    };
+  }, [navigation]);
 
   const { data: ticket, isPending, error, refetch } = useQuery({
     queryKey: ["ticket", ticketId],
@@ -39,15 +54,13 @@ export default function TicketDetailScreen() {
 
   return (
     <SafeAreaView edges={["top"]} className="flex-1 bg-background">
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1">
-        {isPending ? (
-          <LoadingState />
-        ) : error ? (
-          <ErrorState message={toErrorMessage(error)} onRetry={() => void refetch()} />
-        ) : ticket ? (
-          <Detail ticket={ticket} ticketId={ticketId} tab={tab} onTab={setTab} />
-        ) : null}
-      </KeyboardAvoidingView>
+      {isPending ? (
+        <LoadingState />
+      ) : error ? (
+        <ErrorState message={toErrorMessage(error)} onRetry={() => void refetch()} />
+      ) : ticket ? (
+        <Detail ticket={ticket} ticketId={ticketId} tab={tab} onTab={setTab} />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -71,12 +84,17 @@ function Detail({
     ticket.messages,
     (state, newMessage: TicketMessage) => [...state, newMessage],
   );
+  const insets = useSafeAreaInsets();
+  // Animated keyboard lift for the reply composer — drives KeyboardBottomSpacer.
+  const { height: kbHeight, visible: kbVisible } = useKeyboardHeight();
 
   const status = STATUS_BADGES[ticket.status];
   const priority = PRIORITY_BADGES[ticket.priority];
 
   return (
-    <View className="flex-1">
+    // The bottom tab bar is hidden on this screen, so it no longer supplies the
+    // bottom safe-area inset; apply it here so every tab clears the home indicator.
+    <View className="flex-1" style={{ paddingBottom: insets.bottom }}>
       {/* In-content header bar (the route header is hidden). */}
       <View className="px-4 pb-2 pt-2">
         <Pressable onPress={() => router.back()} hitSlop={8} className="mb-2 self-start">
@@ -110,10 +128,13 @@ function Detail({
           <View className="px-4">
             <TicketSummary ticket={ticket} />
           </View>
-          <TicketMessages messages={optimisticMessages} />
+          <TicketMessages messages={optimisticMessages} keyboardVisible={kbVisible} />
           <View className="px-4 pb-4">
             <ReplyForm ticket={ticket} onOptimisticReply={addOptimisticMessage} />
           </View>
+          {/* Animated spacer = keyboard height; the last child so the composer is
+              pushed flush to the keyboard's top edge. */}
+          <KeyboardBottomSpacer height={kbHeight} />
         </View>
       ) : null}
 

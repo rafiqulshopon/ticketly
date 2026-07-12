@@ -53,10 +53,18 @@ function groupKey(m: TicketMessage): string {
  * optimistic reply or an inbound message over realtime). Plain text bodies (the
  * web renders inline markdown; no RN markdown lib in M1 scope).
  */
-export function TicketMessages({ messages }: { messages: TicketMessage[] }) {
+export function TicketMessages({
+  messages,
+  keyboardVisible,
+}: {
+  messages: TicketMessage[];
+  /** When true→ the keyboard just opened; scroll the newest message into view above the lifted composer. */
+  keyboardVisible?: boolean;
+}) {
   const scrollRef = useRef<ScrollView>(null);
   const lastFirstId = useRef<string | undefined>(undefined);
   const lastLength = useRef(0);
+  const wasKeyboardVisible = useRef(false);
   const firstId = messages[0]?.id;
 
   useEffect(() => {
@@ -64,14 +72,20 @@ export function TicketMessages({ messages }: { messages: TicketMessage[] }) {
     if (!el) return;
     // scrollToEnd isn't a method on the RN ref type, but ScrollView exposes it
     // at runtime; cast to the minimal shape we need.
-    if (firstId !== lastFirstId.current || messages.length > lastLength.current) {
+    const justOpenedKeyboard = !!keyboardVisible && !wasKeyboardVisible.current;
+    if (
+      firstId !== lastFirstId.current ||
+      messages.length > lastLength.current ||
+      justOpenedKeyboard
+    ) {
       (el as ScrollView & { scrollToEnd?: (opts?: { animated?: boolean }) => void }).scrollToEnd?.({
         animated: true,
       });
     }
     lastFirstId.current = firstId;
     lastLength.current = messages.length;
-  }, [firstId, messages.length]);
+    wasKeyboardVisible.current = !!keyboardVisible;
+  }, [firstId, messages.length, keyboardVisible]);
 
   if (messages.length === 0) {
     return (

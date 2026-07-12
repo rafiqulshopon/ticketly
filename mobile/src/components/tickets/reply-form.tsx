@@ -1,5 +1,5 @@
 import { useTransition } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Keyboard, Pressable, Text, View } from "react-native";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -131,6 +131,7 @@ export function ReplyForm({
         queryClient.invalidateQueries({ queryKey: ["tickets"] });
         queryClient.invalidateQueries({ queryKey: ["ticket-activity", ticket.id] });
         reset({ bodyText: "" });
+        Keyboard.dismiss();
         Toast.show({ type: "success", text1: "Reply sent." });
       } catch (err) {
         setError("root", { message: toErrorMessage(err) });

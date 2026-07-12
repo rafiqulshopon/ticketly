@@ -6,6 +6,7 @@ export { Segmented, type SegmentedOption } from "./segmented";
 export { Field, TextField } from "./field";
 export { Select, type SelectOption } from "./select";
 export { Modal } from "./modal";
+export { KeyboardBottomSpacer } from "./keyboard-bottom-spacer";
 export { useCollapsible, CollapseChevron } from "./collapsible";
 export { LoadingState } from "./loading-state";
 export { EmptyState } from "./empty-state";
