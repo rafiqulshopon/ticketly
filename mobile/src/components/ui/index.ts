@@ -6,3 +6,4 @@ export { Segmented, type SegmentedOption } from "./segmented";
 export { Field, TextField } from "./field";
 export { Select, type SelectOption } from "./select";
 export { Modal } from "./modal";
+export { useCollapsible, CollapseChevron } from "./collapsible";

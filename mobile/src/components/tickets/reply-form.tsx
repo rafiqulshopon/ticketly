@@ -1,5 +1,5 @@
 import { useTransition } from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -14,7 +14,7 @@ import {
 } from "@ticketly/shared";
 import { ApiError, polishReply, replyToTicket } from "@/lib/api";
 import { useSession } from "@/lib/auth";
-import { Button, Card, CardContent, CardHeader, CardTitle, TextField } from "@/components/ui";
+import { Button, Card, CardContent, CardTitle, CollapseChevron, TextField, useCollapsible } from "@/components/ui";
 
 // The form's only field is the reply body, so its values are exactly the shared
 // reply input — keeping the submit handler cast-free.
@@ -80,6 +80,10 @@ export function ReplyForm({
   const polish = useMutation({
     mutationFn: (values: PolishReplyInput) => polishReply(ticket.id, values),
   });
+  // Collapsed by default so the conversation thread keeps the room; tap the
+  // header to compose. useForm state lives here (the component stays mounted),
+  // so draft text survives collapse/expand — only the input unmounts.
+  const { open, toggle } = useCollapsible(false);
 
   const {
     control,
@@ -148,42 +152,49 @@ export function ReplyForm({
 
   return (
     <Card>
-      <CardHeader>
+      <Pressable
+        onPress={toggle}
+        accessibilityRole="button"
+        className="flex flex-row items-center justify-between p-4"
+      >
         <CardTitle>Reply</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Controller
-          control={control}
-          name="bodyText"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <TextField
-              value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              multiline
-              numberOfLines={4}
-              placeholder="Type your reply…"
-              editable={!isSending}
-              className="min-h-[96px] py-2 text-left"
-            />
+        <CollapseChevron open={open} />
+      </Pressable>
+      {open ? (
+        <CardContent>
+          <Controller
+            control={control}
+            name="bodyText"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <TextField
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                multiline
+                numberOfLines={4}
+                placeholder="Type your reply…"
+                editable={!isSending}
+                className="min-h-[96px] py-2 text-left"
+              />
+            )}
+          />
+          {errors.root ? <Text className="mt-2 text-destructive">{errors.root.message}</Text> : null}
+          {isAiPipeline && (
+            <Text className="mt-2 text-sm text-muted-foreground">
+              AI is handling this ticket — manual reply and polish are disabled until it moves out of New/Processing.
+            </Text>
           )}
-        />
-        {errors.root ? <Text className="mt-2 text-destructive">{errors.root.message}</Text> : null}
-        {isAiPipeline && (
-          <Text className="mt-2 text-sm text-muted-foreground">
-            AI is handling this ticket — manual reply and polish are disabled until it moves out of New/Processing.
-          </Text>
-        )}
-        <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
-          <Button variant="outline" size="sm" onPress={onPolish} loading={polish.isPending} disabled={busy || empty}>
-            <Wand2 size={16} />
-            Polish
-          </Button>
-          <Button onPress={() => void handleSubmit(onSubmit)()} loading={isSending} disabled={busy || empty}>
-            {isSending ? "Sending…" : "Send reply"}
-          </Button>
-        </View>
-      </CardContent>
+          <View className="mt-3 flex flex-row flex-wrap justify-end gap-2">
+            <Button variant="outline" size="sm" onPress={onPolish} loading={polish.isPending} disabled={busy || empty}>
+              <Wand2 size={16} />
+              Polish
+            </Button>
+            <Button onPress={() => void handleSubmit(onSubmit)()} loading={isSending} disabled={busy || empty}>
+              {isSending ? "Sending…" : "Send reply"}
+            </Button>
+          </View>
+        </CardContent>
+      ) : null}
     </Card>
   );
 }

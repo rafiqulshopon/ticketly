@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, ScrollView, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ticketCategoryEnum, type TicketListItem } from "@ticketly/shared";
@@ -44,6 +45,9 @@ function cap(role: string): string {
 export default function TicketsScreen() {
   const { data: session } = useSession();
   const admin = isAdmin(session?.user?.role);
+  // The Tickets tab header is hidden (see (app)/_layout.tsx), so the inbox
+  // owns its top safe-area inset itself.
+  const insets = useSafeAreaInsets();
   // Dashboard deep-link: ?view=all|open|resolvedByAi. While present, the server
   // bucket wins and the manual status filter is suppressed — the server ignores
   // `view` once `status` is set, so we withhold `status` to let the view apply.
@@ -153,9 +157,10 @@ export default function TicketsScreen() {
 
   return (
     <FlatList
+      className="bg-background"
       data={data?.items ?? []}
       keyExtractor={(t) => String(t.id)}
-      contentContainerStyle={{ padding: 16, gap: 10 }}
+      contentContainerStyle={{ paddingTop: insets.top + 16, paddingHorizontal: 16, paddingBottom: 16, gap: 10 }}
       ListHeaderComponent={
         <View>
           <Text className="text-2xl font-semibold text-foreground">Tickets</Text>

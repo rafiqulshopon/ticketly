@@ -46,6 +46,10 @@ export default function AppLayout() {
         name="tickets"
         options={{
           title: "Tickets",
+          // The tickets tab renders its own in-content headers (inbox title +
+          // detail's "‹ Tickets" bar) via the nested Stack, so the tab's own
+          // header is redundant and would just waste vertical space on detail.
+          headerShown: false,
           tabBarIcon: ({ color, size }) => <Inbox color={color} size={size} />,
         }}
       />
