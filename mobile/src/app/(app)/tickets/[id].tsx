@@ -1,11 +1,12 @@
 import { useOptimistic, useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import type { TicketMessage } from "@ticketly/shared";
-import { ApiError, getTicket } from "@/lib/api";
-import { Badge, Segmented } from "@/components/ui";
+import { getTicket } from "@/lib/api";
+import { toErrorMessage } from "@/lib/errors";
+import { Badge, ErrorState, LoadingState, Segmented } from "@/components/ui";
 import { PRIORITY_BADGES, STATUS_BADGES } from "@/components/tickets/ticket-badges";
 import { TicketActivity } from "@/components/tickets/ticket-activity";
 import { TicketMessages } from "@/components/tickets/ticket-messages";
@@ -25,11 +26,10 @@ export default function TicketDetailScreen() {
   const ticketId = Number(id);
   const [tab, setTab] = useState<Tab>("conversation");
 
-  const { data: ticket, isLoading, error, refetch } = useQuery({
+  const { data: ticket, isPending, error, refetch } = useQuery({
     queryKey: ["ticket", ticketId],
     queryFn: ({ signal }) => getTicket(ticketId, { signal }),
     enabled: Number.isFinite(ticketId),
-    retry: (failureCount, err) => !(err instanceof ApiError) && failureCount < 2,
   });
 
   // Reached without a numeric id (stale deep link / nav glitch) → bounce to the inbox.
@@ -40,17 +40,10 @@ export default function TicketDetailScreen() {
   return (
     <SafeAreaView edges={["top"]} className="flex-1 bg-background">
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1">
-        {isLoading ? (
-          <View className="flex-1 items-center justify-center">
-            <ActivityIndicator />
-          </View>
+        {isPending ? (
+          <LoadingState />
         ) : error ? (
-          <View className="flex-1 items-center justify-center p-6">
-            <Text className="text-destructive">{toDetailErrorMessage(error)}</Text>
-            <Pressable onPress={() => void refetch()} className="mt-4">
-              <Text className="text-primary">Try again</Text>
-            </Pressable>
-          </View>
+          <ErrorState message={toErrorMessage(error)} onRetry={() => void refetch()} />
         ) : ticket ? (
           <Detail ticket={ticket} ticketId={ticketId} tab={tab} onTab={setTab} />
         ) : null}
@@ -137,13 +130,4 @@ function Detail({
       ) : null}
     </View>
   );
-}
-
-function toDetailErrorMessage(err: unknown): string {
-  if (err instanceof ApiError) {
-    if (err.status === 404) return "Ticket not found.";
-    if (err.status === 403) return "You don't have permission to view this ticket.";
-    if (err.status === 401) return "Your session may have expired — please sign in again.";
-  }
-  return err instanceof Error ? err.message : "Failed to load ticket.";
 }

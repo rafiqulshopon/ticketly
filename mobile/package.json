@@ -12,12 +12,15 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "build:ios": "eas build --platform ios",
+    "update": "eas update"
   },
   "dependencies": {
     "@better-auth/expo": "^1.6.20",
     "@expo/ui": "~57.0.4",
     "@hookform/resolvers": "^5.4.0",
+    "@sentry/react-native": "~7.11.0",
     "@shopify/react-native-skia": "2.6.2",
     "@tanstack/react-query": "^5.101.2",
     "@ticketly/shared": "*",
@@ -37,6 +40,7 @@
     "expo-status-bar": "~57.0.0",
     "expo-symbols": "~57.0.0",
     "expo-system-ui": "~57.0.0",
+    "expo-updates": "~57.0.6",
     "expo-web-browser": "~57.0.0",
     "lucide-react-native": "^1.24.0",
     "nativewind": "^4.2.6",

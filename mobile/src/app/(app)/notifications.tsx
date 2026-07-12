@@ -1,10 +1,12 @@
-import { ActivityIndicator, FlatList, Pressable, Text, View } from "react-native";
+import { FlatList, RefreshControl, Text, View } from "react-native";
 import { router } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Toast from "react-native-toast-message";
 import type { Notification } from "@ticketly/shared";
-import { ApiError, getNotifications, markAllNotificationsRead, markNotificationRead } from "@/lib/api";
-import { Button } from "@/components/ui";
+import { getNotifications, markAllNotificationsRead, markNotificationRead } from "@/lib/api";
+import { useIconColor } from "@/lib/colors";
+import { toErrorMessage } from "@/lib/errors";
+import { Button, EmptyState, ErrorState, LoadingState } from "@/components/ui";
 import { NotificationItem } from "@/components/notifications/notification-item";
 import { useUnreadNotificationCount } from "@/hooks/use-notifications";
 
@@ -17,10 +19,10 @@ export default function NotificationsScreen() {
   const queryClient = useQueryClient();
   const unread = useUnreadNotificationCount();
 
-  const { data, isPending, isError, error, refetch } = useQuery({
+  const primary = useIconColor("primary");
+  const { data, isPending, isFetching, isError, error, refetch } = useQuery({
     queryKey: ["notifications"],
     queryFn: ({ signal }) => getNotifications({ signal }),
-    retry: (failureCount, err) => !(err instanceof ApiError) && failureCount < 2,
   });
 
   const markAll = useMutation({ mutationFn: () => markAllNotificationsRead() });
@@ -55,29 +57,25 @@ export default function NotificationsScreen() {
     }
   }
 
-  if (isPending) {
-    return (
-      <View className="flex-1 items-center justify-center bg-background">
-        <ActivityIndicator />
-      </View>
-    );
-  }
+  if (isPending) return <LoadingState />;
 
   if (isError && !data) {
-    return (
-      <View className="flex-1 items-center justify-center bg-background p-6">
-        <Text className="text-destructive">{(error as Error).message}</Text>
-        <Pressable onPress={() => void refetch()} className="mt-4">
-          <Text className="text-primary">Try again</Text>
-        </Pressable>
-      </View>
-    );
+    return <ErrorState message={toErrorMessage(error)} onRetry={() => void refetch()} />;
   }
 
   const items = data ?? [];
 
   return (
     <FlatList
+      className="bg-background"
+      refreshControl={
+        <RefreshControl
+          refreshing={isFetching && !isPending}
+          onRefresh={refresh}
+          tintColor={primary}
+          colors={[primary]}
+        />
+      }
       data={items}
       keyExtractor={(n) => n.id}
       contentContainerStyle={{ padding: 16, gap: 10 }}
@@ -99,9 +97,7 @@ export default function NotificationsScreen() {
           )}
         </View>
       }
-      ListEmptyComponent={
-        <Text className="mt-8 text-center text-muted-foreground">You&apos;re all caught up.</Text>
-      }
+      ListEmptyComponent={<EmptyState message="You're all caught up." />}
       renderItem={({ item }) => <NotificationItem n={item} onPress={() => void onOpenItem(item)} />}
     />
   );

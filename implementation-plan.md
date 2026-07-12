@@ -149,7 +149,7 @@ The backend unlock: the `@better-auth/expo` server plugin (`api/src/auth/auth.co
 - [x] **M1 — Tickets.** Full list (debounced search, server sort/filter/paginate, role-aware statuses). Detail: thread + smooth scroll, reply form (optimistic + `replyToTicket`), AI polish + summarize, inline property edits, Activity tab. Realtime SSE wired into the detail page.
 - [x] **M2 — Notifications & shell.** Notification bell (poll unread-count 30s + realtime invalidation), mark-read. Bottom-tab shell, `RoleRedirect`.
 - [ ] **M3 — Admin.** Dashboard (stat cards + `victory-native` bar chart). Users mgmt (list, create/edit, delete).
-- [ ] **M4 — Hardening.** Sentry + error boundaries, loading/empty/error states, pull-to-refresh, `expo-updates` OTA + `eas.json` build profiles.
+- [x] **M4 — Hardening.** Sentry + error boundaries, loading/empty/error states, pull-to-refresh, `expo-updates` OTA + `eas.json` build profiles.
 
 **🚩 Mobile parity milestone — feature parity with the web.**
 

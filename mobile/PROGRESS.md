@@ -6,7 +6,7 @@ milestone view; **this file is the granular tracker** — what's built, what's
 next, and the decisions worth not losing. Conventions live in the root
 [CLAUDE.md](../CLAUDE.md).
 
-**Last updated:** 2026-07-12 · **Current milestone:** M3 ✅ complete → M4 next
+**Last updated:** 2026-07-12 · **Current milestone:** M4 ✅ complete → mobile parity 🎉
 
 ---
 
@@ -191,10 +191,95 @@ A UI build on the existing data layer — `getDashboardStats`, `getUsers`, `crea
 - **Skia axis-label font unverified on-device** — `matchFont` returns the system font; confirm labels render on iOS/Android. Fallbacks documented in the chart component.
 - **Long first native build** — adding Skia means the first `expo run:ios` / EAS build compiles Skia (~10 min, large prebuild). Expectation only.
 
-## M4 — Hardening ⬜
+## M4 — Hardening ✅ COMPLETE
 
-- [ ] Sentry (`@sentry/react-native`) init + `ErrorBoundary`
-- [ ] Consistent loading / empty / error states across screens
-- [ ] Pull-to-refresh on lists
-- [ ] `expo-updates` OTA + `eas.json` (dev / preview / production)
-- [ ] Prune unused template assets
+Verified 2026-07-12: `tsc --noEmit` (mobile), `eslint . --max-warnings 0` (mobile),
+`jest` (27/27), and `npx expo export --platform ios` (Sentry SDK + expo-updates resolve)
+all pass.
+
+- [x] Sentry (`@sentry/react-native`) init + `ErrorBoundary`
+- [x] Consistent loading / empty / error states across screens
+- [x] Pull-to-refresh on lists
+- [x] `expo-updates` OTA + `eas.json` (dev / preview / production)
+- [x] Prune unused template assets
+
+### What was built
+
+- **Sentry (errors-only, no-op without a DSN)** — `@sentry/react-native ~7.11.0`
+  via `npx expo install`. [src/lib/sentry.ts](./src/lib/sentry.ts) does
+  `Sentry.init({ dsn: EXPO_PUBLIC_SENTRY_DSN, enabled: !!DSN, environment: __DEV__ ? "development" : "production" })`,
+  mirroring `web/src/main.tsx` + `api/src/instrument.ts`. Imported as the FIRST line of
+  [src/app/_layout.tsx](./src/app/_layout.tsx) (ahead of `global.css`). A dependency-free
+  terminal fallback ([src/components/sentry-error-fallback.tsx](./src/components/sentry-error-fallback.tsx)
+  — design tokens only, no hooks/router/queries) backs a root `<Sentry.ErrorBoundary>`
+  wrapping the `<Stack>` (Toast stays outside it). `EXPO_PUBLIC_SENTRY_DSN` was already in
+  `.env.example`. Build-time source-map upload is wired via the `@sentry/react-native/expo`
+  config plugin in the new [app.config.ts](./app.config.ts) (auto-reads
+  `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT` at EAS Build).
+- **Unified loading / empty / error states** — three shared primitives in
+  [src/components/ui/](./src/components/ui/): `LoadingState`, `ErrorState`, `EmptyState`
+  (exported from the ui barrel); plus [src/lib/errors.ts](./src/lib/errors.ts)
+  `toErrorMessage(err, fallback)` — one `ApiError`-status map (401/403/404) replacing the
+  three divergent per-screen strategies (raw `.message`; dashboard/users `toErrorMessage`;
+  `toDetailErrorMessage`). All 5 data screens now use them; the redundant inline `retry:`
+  predicates were dropped (the `QueryClient` default already covers them); `tickets/[id]`
+  migrated `isLoading`→`isPending` and the missing `bg-background` on its error wrapper is
+  fixed by `ErrorState`.
+- **Pull-to-refresh** — `RefreshControl` (`refreshing={isFetching && !isPending}`;
+  `onRefresh` → `refetch`, or the existing `refresh()` invalidator on notifications) on the
+  tickets list, notifications feed, users list, and dashboard `ScrollView`. `RefreshControl`
+  can't take `className`, so the spinner color is raw hex via `useIconColor("primary")` (the
+  same token resolver the dashboard icons use). Notifications' `FlatList` also gained the
+  `bg-background` it was missing.
+- **expo-updates OTA + EAS Build profiles** — [app.config.ts](./app.config.ts) (function form
+  over the static `app.json`) adds the `@sentry/react-native/expo` plugin, the `updates`
+  block (`checkAutomatically: "ON_LOAD"`; URL + `extra.eas.projectId` are
+  `REPLACE_WITH_PROJECT_ID` placeholders filled by `eas update:configure`), and
+  `runtimeVersion: { policy: "fingerprint" }`. [eas.json](./eas.json) defines
+  development / preview / production profiles with channels; production uses
+  `autoIncrement`. Added `build:ios` + `update` npm scripts.
+- **Asset prune** — removed 14 unused Expo template assets (expo/react badges + logos,
+  `logo-glow`, `tutorial-web`, the whole `tabIcons/` dir); kept the 6 `app.json` references.
+
+### Decisions worth not losing
+
+- **Sentry setup is manual, not the `@sentry/wizard`** — keeps the repo's `enabled: !!DSN`
+  no-op gating and a dependency-free, design-token fallback. Same shape as web + api.
+- **`runtimeVersion.policy = "fingerprint"`** — auto-bumps the runtime version on any
+  native/config change so an OTA bundle is only delivered to a matching binary
+  (incompatible bundles are silently skipped by expo-updates). Cost: any native change
+  forces a new EAS build before the next OTA lands.
+- **`app.json` → `app.config.ts` (function form extending `app.json`)** — `app.json` stays
+  the static source of truth; the config layers the Sentry plugin + updates + extra. Note:
+  `ConfigContext`/`ExpoConfig` are imported from `"expo/config"` (NOT `@expo/config-types`,
+  which dropped `ConfigContext` in SDK 57), and the merged object needs `as ExpoConfig`
+  because the spread makes `name` `string | undefined`.
+- **The Sentry *metro* wrapper was dropped** — `@sentry/react-native` v7 renamed `withSentry`
+  → `withSentryConfig`, but wrapping the metro config crashes `expo export` with an opaque
+  "Cannot read properties of undefined (reading 'match')" (in the always-on
+  serializer/resolver — it fails even with all optional features off). The wrapper is NOT
+  required: the SDK captures crashes, and source maps upload at EAS Build via the config
+  plugin. See the comment block in [metro.config.js](./metro.config.js).
+- **`refreshing = isFetching && !isPending`** (not `isPending` alone) — true on a background
+  refetch (pull-to-refresh), false on the initial full-screen load; `isPending` alone would
+  freeze the spinner during first paint.
+- **`errors.test.ts` mocks `@/lib/auth`** — the test only needs the `ApiError` class from
+  `@/lib/api`, but that module pulls in `@/lib/auth` → `better-auth/react` (ESM `.mjs` that
+  jest-expo doesn't transform). A per-file `jest.mock("@/lib/auth", …)` breaks the chain
+  (same pattern as the lucide mock in `notification-item.test`).
+
+### Known gaps / flagged (post-M4 / device-only)
+
+- **No manual device run yet** — all four build gates pass, but Sentry capture, the
+  ErrorBoundary fallback, OTA, and PTR haven't been driven on a simulator/device. Sentry is
+  only fully verifiable via a real EAS build with `SENTRY_AUTH_TOKEN` set (trigger a throw,
+  confirm the event + readable stack). OTA needs `eas update --channel preview` then a relaunch.
+- **External setup the code can only stub** — `EXPO_PUBLIC_SENTRY_DSN` in `.env`; the
+  build-time `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT` in EAS secrets/CI;
+  `eas login` + `eas update:configure` (writes the real `projectId` + updates URL);
+  `npx expo prebuild --clean` (expo-updates + @sentry/react-native add native code).
+- **Sentry metro wrapper incompatible** — see "Decisions"; OTA symbolication relies on the
+  build-time config plugin instead of in-band debug IDs. Revisit when @sentry/react-native /
+  Expo SDK 57 realign.
+- **fingerprint OTA skipping** — by design, a JS-only `eas update` after a native change
+  without a rebuild is silently skipped. Documented for whoever ships updates.

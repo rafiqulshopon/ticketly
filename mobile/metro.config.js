@@ -27,4 +27,14 @@ config.resolver.extraNodeModules = {
   "@ticketly/shared": path.resolve(projectRoot, "../shared/src"),
 };
 
+// NOTE on Sentry: the @sentry/react-native v7 metro wrapper (`withSentryConfig`)
+// was tried here but crashes `expo export`/bundling with an opaque
+// "Cannot read properties of undefined (reading 'match')" — an incompatibility
+// with this Metro + SDK-57 combo (it fails even with all optional features off,
+// so it's in the always-on serializer/resolver, not something we can configure
+// away). The metro wrapper is NOT required for the M4 deliverable: Sentry.init
+// in src/lib/sentry.ts captures crashes, and source maps are uploaded at EAS
+// Build time by the `@sentry/react-native/expo` config plugin in app.config.ts.
+// Revisit the metro wrapper (it adds in-band debug IDs for OTA symbolication)
+// once @sentry/react-native and Expo SDK 57 realign.
 module.exports = withNativeWind(config, { input: "./src/global.css" });

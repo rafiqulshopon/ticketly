@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, ScrollView, Text, View } from "react-native";
+import { FlatList, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ticketCategoryEnum, type TicketListItem } from "@ticketly/shared";
-import { ApiError, getAssignees, getTickets } from "@/lib/api";
+import { getAssignees, getTickets } from "@/lib/api";
 import { isAdmin, useSession } from "@/lib/auth";
 import { relativeTime } from "@/lib/format";
-import { Badge, Select, type SelectOption, TextField } from "@/components/ui";
+import { useIconColor } from "@/lib/colors";
+import { toErrorMessage } from "@/lib/errors";
+import { Badge, EmptyState, ErrorState, LoadingState, Select, type SelectOption, TextField } from "@/components/ui";
 import { PRIORITY_BADGES, STATUS_BADGES, TICKET_VIEW_LABELS, prettifyEnum } from "@/components/tickets/ticket-badges";
 
 const PAGE_SIZE = 20;
@@ -83,11 +85,14 @@ export default function TicketsScreen() {
   }
 
   const sort = SORT_OPTIONS.find((s) => s.value === sortKey) ?? SORT_OPTIONS[0];
+  // RefreshControl can't take className — it needs raw hex, sourced from the
+  // token resolver (same hook the dashboard icons use).
+  const primary = useIconColor("primary");
 
   // keepPreviousData keeps the old rows visible while a new page/search/sort
   // loads instead of flashing a spinner. The AbortSignal cancels superseded
   // requests. The server does the ORDER BY + filtering.
-  const { data, isPending, isError, error, refetch } = useQuery({
+  const { data, isPending, isFetching, isError, error, refetch } = useQuery({
     queryKey: ["tickets", search, page, sort.sortBy, sort.sortDir, status, category, priority, assigneeId, view ?? null],
     queryFn: ({ signal }) =>
       getTickets(
@@ -106,7 +111,6 @@ export default function TicketsScreen() {
         { signal },
       ),
     placeholderData: keepPreviousData,
-    retry: (failureCount, err) => !(err instanceof ApiError) && failureCount < 2,
   });
 
   const assignees = useQuery({
@@ -136,28 +140,23 @@ export default function TicketsScreen() {
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  if (isPending) {
-    return (
-      <View className="flex-1 items-center justify-center bg-background">
-        <ActivityIndicator />
-      </View>
-    );
-  }
+  if (isPending) return <LoadingState />;
 
   if (isError && !data) {
-    return (
-      <View className="flex-1 items-center justify-center bg-background p-6">
-        <Text className="text-destructive">{(error as Error).message}</Text>
-        <Pressable onPress={() => void refetch()} className="mt-4">
-          <Text className="text-primary">Try again</Text>
-        </Pressable>
-      </View>
-    );
+    return <ErrorState message={toErrorMessage(error)} onRetry={() => void refetch()} />;
   }
 
   return (
     <FlatList
       className="bg-background"
+      refreshControl={
+        <RefreshControl
+          refreshing={isFetching && !isPending}
+          onRefresh={() => void refetch()}
+          tintColor={primary}
+          colors={[primary]}
+        />
+      }
       data={data?.items ?? []}
       keyExtractor={(t) => String(t.id)}
       contentContainerStyle={{ paddingTop: insets.top + 16, paddingHorizontal: 16, paddingBottom: 16, gap: 10 }}
@@ -242,9 +241,7 @@ export default function TicketsScreen() {
           </ScrollView>
         </View>
       }
-      ListEmptyComponent={
-        <Text className="mt-8 text-center text-muted-foreground">No tickets match these filters.</Text>
-      }
+      ListEmptyComponent={<EmptyState message="No tickets match these filters." />}
       ListFooterComponent={
         total === 0 ? null : (
           <View className="mt-2 flex flex-row items-center justify-between">
