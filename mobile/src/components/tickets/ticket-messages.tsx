@@ -94,7 +94,19 @@ export function TicketMessages({ messages }: { messages: TicketMessage[] }) {
   );
 }
 
-type BubbleColor = { bubble: string; avatar: string };
+type MessageKind = "ai" | "agent" | "customer";
+
+// Bubble background and foreground are split because RN <Text> does NOT inherit
+// `color` from a parent <View>: the foreground must live on the <Text> (the body
+// and the avatar initials), or it falls back to black — invisible on the dark
+// `bg-primary` agent bubble. Object map keyed by MessageKind, not a ternary.
+type BubbleColor = { bubble: string; bubbleText: string; avatar: string; avatarText: string };
+
+const BUBBLE_COLORS: Record<MessageKind, BubbleColor> = {
+  ai: { bubble: "bg-ai", bubbleText: "text-ai-foreground", avatar: "bg-ai-soft", avatarText: "text-ai" },
+  agent: { bubble: "bg-primary", bubbleText: "text-primary-foreground", avatar: "bg-secondary", avatarText: "text-foreground" },
+  customer: { bubble: "bg-muted", bubbleText: "text-foreground", avatar: "bg-muted", avatarText: "text-muted-foreground" },
+};
 
 function MessageItem({ message, firstInGroup }: { message: TicketMessage; firstInGroup: boolean }) {
   const meta = senderBadge(message);
@@ -102,17 +114,14 @@ function MessageItem({ message, firstInGroup }: { message: TicketMessage; firstI
   const isAgent = message.senderType === "agent";
   const author = isAi ? null : isAgent ? message.senderName ?? "Support team" : message.fromEmail;
 
-  const colors: BubbleColor = isAi
-    ? { bubble: "bg-ai text-ai-foreground", avatar: "bg-ai-soft text-ai" }
-    : isAgent
-      ? { bubble: "bg-primary text-primary-foreground", avatar: "bg-secondary text-foreground" }
-      : { bubble: "bg-muted text-foreground", avatar: "bg-muted text-muted-foreground" };
+  const kind: MessageKind = isAi ? "ai" : isAgent ? "agent" : "customer";
+  const colors = BUBBLE_COLORS[kind];
 
   return (
     <View className={cx("flex flex-row gap-2.5", isAgent ? "flex-row-reverse" : "flex-row", firstInGroup ? "mt-4" : "mt-1")}>
       {firstInGroup ? (
         <Avatar className="mt-5 size-7 shrink-0">
-          <AvatarFallback className={colors.avatar}>{isAi ? <Sparkles size={14} /> : <AvatarText value={author ?? message.fromEmail} />}</AvatarFallback>
+          <AvatarFallback className={colors.avatar}>{isAi ? <Sparkles size={14} /> : <AvatarText value={author ?? message.fromEmail} className={colors.avatarText} />}</AvatarFallback>
         </Avatar>
       ) : (
         <View className="size-7 shrink-0" />
@@ -125,7 +134,7 @@ function MessageItem({ message, firstInGroup }: { message: TicketMessage; firstI
           </View>
         )}
         <View className={cx("rounded-2xl px-3.5 py-2", colors.bubble)}>
-          <Text className="text-sm leading-relaxed">{message.bodyText}</Text>
+          <Text className={cx("text-sm leading-relaxed", colors.bubbleText)}>{message.bodyText}</Text>
         </View>
         <Text className="text-xs text-muted-foreground">{dateFmt.format(new Date(message.createdAt))}</Text>
       </View>
@@ -133,7 +142,9 @@ function MessageItem({ message, firstInGroup }: { message: TicketMessage; firstI
   );
 }
 
-/** The initials label inside an avatar (separate so it doesn't render when AI). */
-function AvatarText({ value }: { value: string }) {
-  return <Text className="text-[10px] font-medium">{initials(value)}</Text>;
+/** The initials label inside an avatar (separate so it doesn't render when AI).
+ *  Takes the avatar's foreground color directly — RN <Text> won't inherit it from
+ *  the AvatarFallback <View>. */
+function AvatarText({ value, className }: { value: string; className?: string }) {
+  return <Text className={cx("text-[10px] font-medium", className)}>{initials(value)}</Text>;
 }
