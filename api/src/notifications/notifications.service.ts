@@ -1,6 +1,8 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import type { Notification as NotificationDto, NotificationType } from "@ticketly/shared";
 import { PrismaService } from "../prisma/prisma.service";
+import { SEND_PUSH_QUEUE, SEND_PUSH_SEND_OPTIONS } from "../queue/queue.constants";
+import { QueueService } from "../queue/queue.service";
 import { SystemAgentService } from "../system-agent/system-agent.service";
 
 /** Cap on how many rows the list endpoint returns (newest first). */
@@ -31,6 +33,7 @@ export class NotificationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly systemAgent: SystemAgentService,
+    private readonly queue: QueueService,
   ) {}
 
   /** Fan out a `new_ticket` notification to admins + the human assignee. */
@@ -47,6 +50,15 @@ export class NotificationsService {
       ticketSubject: ticket.subject,
       requesterName: ticket.requesterName,
     });
+    // At creation the assignee is the AI agent (excluded by resolveRecipients),
+    // so this pushes to admins only — the "new ticket is admin-only" rule.
+    await this.enqueuePush(
+      recipientIds,
+      "new_ticket",
+      ticketId,
+      `New ticket from ${ticket.requesterName}`,
+      ticket.subject,
+    );
   }
 
   /** Fan out a `new_message` notification to admins + the human assignee. */
@@ -63,6 +75,13 @@ export class NotificationsService {
       ticketSubject: ticket.subject,
       requesterName: ticket.requesterName,
     });
+    await this.enqueuePush(
+      recipientIds,
+      "new_message",
+      ticketId,
+      `New reply on "${ticket.subject}"`,
+      `From ${ticket.requesterName}`,
+    );
   }
 
   /**
@@ -89,6 +108,15 @@ export class NotificationsService {
       ticketSubject: ticket.subject,
       requesterName: ticket.requesterName,
     });
+    // Assignment push goes to the new owner only (mirrors the bell — admins
+    // already get the new-ticket/new-message pushes for this ticket).
+    await this.enqueuePush(
+      [assigneeId],
+      "ticket_assigned",
+      ticketId,
+      "Assigned to you",
+      ticket.subject,
+    );
   }
 
   /** The caller's notifications, newest first (capped at {@link LIST_LIMIT}). */
@@ -151,6 +179,36 @@ export class NotificationsService {
    */
   recipientUserIds(assigneeId: string | null): Promise<string[]> {
     return this.resolveRecipients(assigneeId);
+  }
+
+  /**
+   * Enqueue a mobile push to the same audience the bell just fanned out to. The
+   * push is durable — it goes through the `send-push` pg-boss queue and is
+   * delivered by `NotificationsPushConsumer` — so an Expo outage never breaks the
+   * ticket write that triggered it. Wrapped in try/catch so a pg-boss/DB blip
+   * can't abort the bell fan-out: the bell is the primary signal, push is a
+   * best-effort complement. The recipient set is snapshotted into the job so a
+   * later reassignment can't change who gets notified.
+   */
+  private async enqueuePush(
+    recipientIds: string[],
+    type: NotificationType,
+    ticketId: number,
+    title: string,
+    body: string,
+  ): Promise<void> {
+    if (recipientIds.length === 0) return;
+    try {
+      await this.queue.send(
+        SEND_PUSH_QUEUE,
+        { recipientUserIds: recipientIds, title, body, data: { type, ticketId } },
+        SEND_PUSH_SEND_OPTIONS,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Push enqueue failed (${type}, ticket ${ticketId}) — ${err instanceof Error ? err.message : err}`,
+      );
+    }
   }
 
   // ---------------------------------------------------------------------------

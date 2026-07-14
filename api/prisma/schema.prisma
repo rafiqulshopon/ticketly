@@ -36,6 +36,7 @@ model User {
   sentMessages    Message[]
   drafts          Draft[]
   notifications   Notification[]
+  pushTokens      PushToken[]
   activitiesAuthored TicketActivity[] @relation("ActivityActors")
 }
 
@@ -246,6 +247,28 @@ model Notification {
   @@index([userId, readAt])
   @@index([ticketId])
   @@map("notifications")
+}
+
+// An Expo push token registered by a user's device, used to deliver mobile push
+// notifications when the app is closed/backgrounded (the SSE realtime stream only
+// reaches an open app). `token` is globally unique — a device is one physical
+// install, so on re-login (even as a different user) the row is upserted in place
+// and `userId` is reassigned rather than creating a duplicate. Cascade-deleted with
+// the user so a deleted account stops receiving pushes. `platform` is a plain
+// String constrained at the app layer to "ios" | "android" (mirrors the
+// `Notification.type` convention).
+model PushToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  platform  String // "ios" | "android"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Drives the "fetch tokens for these recipient users" lookup at fan-out time.
+  @@index([userId])
+  @@map("push_tokens")
 }
 
 // One entry in a ticket's lifecycle timeline — created when it arrived, each

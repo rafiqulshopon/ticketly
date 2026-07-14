@@ -39,3 +39,24 @@ export const unreadCountSchema = z.object({
 });
 
 export type UnreadCount = z.infer<typeof unreadCountSchema>;
+
+// ---------------------------------------------------------------------------
+// Mobile push-token registration (`POST/DELETE /api/notifications/devices`).
+// ---------------------------------------------------------------------------
+
+/** Device platform for a registered Expo push token. */
+export const platformSchema = z.enum(["ios", "android"]);
+export type Platform = z.infer<typeof platformSchema>;
+
+/** Body of `POST /api/notifications/devices` — register/refresh a device's Expo push token. */
+export const registerPushTokenSchema = z.object({
+  token: z.string().min(1),
+  platform: platformSchema,
+});
+export type RegisterPushTokenInput = z.infer<typeof registerPushTokenSchema>;
+
+/** Body of `DELETE /api/notifications/devices` — drop a device's Expo push token (on logout). */
+export const unregisterPushTokenSchema = z.object({
+  token: z.string().min(1),
+});
+export type UnregisterPushTokenInput = z.infer<typeof unregisterPushTokenSchema>;

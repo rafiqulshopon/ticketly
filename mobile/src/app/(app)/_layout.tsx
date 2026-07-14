@@ -3,18 +3,22 @@ import { Bell, Inbox, LayoutDashboard, Users } from "lucide-react-native";
 import { useSession, isAdmin } from "@/lib/auth";
 import { useIconColor } from "@/lib/colors";
 import { useRealtimeEvents } from "@/hooks/use-realtime-events";
+import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { useUnreadNotificationCount } from "@/hooks/use-notifications";
 
 /** Authenticated shell — the analog of the web's RequireAuth + AppLayout.
  *  Guards: no session → login. The realtime SSE hook is mounted here (it
  *  self-gates on the session), so the stream opens at sign-in and closes at
- *  sign-out. Admin-only tabs (Dashboard, Users) are hidden from non-admins.
- *  The Notifications tab carries a live unread-count badge (polled every 30s by
- *  use-notifications + refreshed on realtime SSE events). */
+ *  sign-out; the push-notification hook is mounted here too (registers the
+ *  device's Expo push token on sign-in, unregisters on sign-out). Admin-only
+ *  tabs (Dashboard, Users) are hidden from non-admins. The Notifications tab
+ *  carries a live unread-count badge (polled every 30s by use-notifications +
+ *  refreshed on realtime SSE events). */
 export default function AppLayout() {
   // All hooks run unconditionally, before any early return (Rules of Hooks).
   const { data: session, isPending } = useSession();
   useRealtimeEvents();
+  usePushNotifications();
   const unread = useUnreadNotificationCount();
   const activeTint = useIconColor("primary");
   const inactiveTint = useIconColor("muted");

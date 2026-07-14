@@ -292,3 +292,18 @@ export async function markNotificationRead(id: string, config?: AxiosRequestConf
 export async function markAllNotificationsRead(config?: AxiosRequestConfig): Promise<void> {
   return api<void>("/notifications/read-all", { method: "POST", ...config });
 }
+
+/** Register/refresh this device's Expo push token so the server can push to it
+ *  while the app is closed/backgrounded. The session cookie is attached by the
+ *  axios interceptor, so the token is bound to the signed-in user server-side.
+ *  No response body (204). Throws `ApiError(status)` on failure. */
+export async function registerPushToken(token: string, platform: "ios" | "android"): Promise<void> {
+  return api<void>("/notifications/devices", { method: "POST", data: { token, platform } });
+}
+
+/** Unregister this device's Expo push token (on sign-out) so a logged-out device
+ *  stops receiving pushes. No response body (204). Throws `ApiError(status)` on
+ *  failure. */
+export async function unregisterPushToken(token: string): Promise<void> {
+  return api<void>("/notifications/devices", { method: "DELETE", data: { token } });
+}
